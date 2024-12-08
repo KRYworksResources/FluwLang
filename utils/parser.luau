@@ -1,0 +1,156 @@
+local Parser = {}
+local Error = require("error")
+
+Parser.Operator = {
+    ["not"] = 5, -- Unary operator
+    ["+"] = 2, -- Addition
+    ["-"] = 2, -- Subtraction
+    ["*"] = 3, -- Multiplication
+    ["/"] = 3, -- Division
+    ["%"] = 3, -- Modulus
+    ["^"] = 4, -- Exponent
+    ["<"] = 2, -- Smaller than
+    [">"] = 2, -- Bigger than
+    ["<="] = 2, -- Smaller than or equal to
+    [">="] = 2, -- Bigger than or equal to
+    ["=="] = 2, -- Equal to
+    ["!="] = 2, -- Not equal to
+    ["and"] = 1, -- AND operator
+    ["or"] = 1, -- OR operator
+}
+
+function Parser.new(tokens)
+    local self = setmetatable({}, { __index = Parser })
+    self.tokens = tokens
+    self.position = 1
+    return self
+end
+-- Get the current token
+function Parser:currentToken()
+    return self.tokens[self.position]
+end
+-- Advance to the next token
+function Parser:advance()
+    self.position += 1
+end
+local precedence = 0
+-- Parse statements and variable definitions
+function Parser:parseStatement()
+    local node
+    precedence = 0
+    -- Check for variable definition (e.g., def x = 5;)
+    if self:currentToken().type == "KEYWORD" and self:currentToken().value == "def" then
+        node = self:parseVariableDefinition()
+    else
+        node = self:parseExpression()
+    end
+    -- Ensure the statement ends with a semicolon
+    if self:currentToken().type == "SYMBOL" and self:currentToken().value == ";" then
+        self:advance() -- Consume the semicolon
+    else
+        print(node, self:currentToken())
+        Error:error("Expected ';' at the end of statement")
+        error("Expected ';' at the end of statement")
+    end
+    return node
+end
+function Parser:parseVariableDefinition()
+    self:advance() -- Consume 'def'
+    if self:currentToken().type ~= "IDENTIFIER" then
+        error("Expected variable name after 'def'")
+    end
+    local varName = self:currentToken().value
+    self:advance() -- Consume the identifier
+    if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
+        error("Expected '=' after variable name")
+    end
+    self:advance() -- Consume '='
+    local value = self:parseExpression()
+    return { type = "VariableDefinition", name = varName, value = value }
+end
+
+function Parser:parseExpression()
+    return self:parseAssignment()
+end
+
+-- Parse assignments (e.g., x = expression)
+function Parser:parseAssignment()
+    local token = self:currentToken()
+    if token.type == "IDENTIFIER" then
+        local variableName = token.value
+        self:advance()
+        -- Check if it's an assignment
+        if self:currentToken().value == "=" then
+            self:advance()
+            local expression = self:parseExpression()
+            return { type = "AssignmentExpression", variable = variableName, value = expression }
+        else
+            -- Backtrack when it's not an assignment
+            self.position -= 1
+        end
+    end
+    -- Fall back to parsing as an expression
+    return self:parseBinaryExpression()
+end
+
+-- Parse binary expressions
+function Parser:parseBinaryExpression()
+    local left = self:parsePrimary()
+    while self:currentToken().type == "OPERATOR" do
+        local operator = self:currentToken().value
+        local operatorprecedence = Parser.Operator[operator] or 0
+        -- If the current operator has lower , stop parsing
+        if operatorprecedence < precedence or 
+            (operatorprecedence == precedence and operator ~= "^") then
+            break
+        end
+        self:advance() -- Consume the operator
+        -- Parse the right-hand side with higher 
+        local right = self:parseExpression(operatorprecedence)
+        left = {
+            type = "BinaryExpression",
+            operator = operator,
+            left = left,
+            right = right,
+        }
+    end
+    return left
+end
+-- Parse primary values (numbers, variables, parentheses)
+function Parser:parsePrimary()
+    local token = self:currentToken()
+    if token.type == "NUMBER" then
+        self:advance()
+        return { type = "NumberLiteral", value = token.value }
+    elseif token.type == "IDENTIFIER" then
+        self:advance()
+        return { type = "Identifier", value = token.value }
+    elseif token.type == "KEYWORD" then
+        if token.value == "true" or token.value == "false" then
+            self:advance()
+            return { type = "BooleanLiteral", value = token.value == "true" }
+        end
+    elseif token.type == "SYMBOL" then
+        self:advance()
+        if token.value == "(" then
+            local expression = self:parseExpression()
+            if self:currentToken().type == "SYMBOL" and self:currentToken().value == ")" then
+                self:advance()
+            else
+                Error:error("Expected ')'")
+                error("Expected ')'")
+            end
+            return expression
+        end
+    elseif token.type == "OPERATOR" and token.value == "-" then
+        -- Handle unary minus
+        self:advance() -- Consume '-'
+        local expression = self:parsePrimary()
+        return { type = "UnaryExpression", operator = "-", value = expression }
+    else
+        Error:error("Unexpected token: " .. (token.value or "EOF"))
+        error("Unexpected token: " .. (token.value or "EOF"))
+    end
+end
+
+return Parser
