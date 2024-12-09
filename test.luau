@@ -10,6 +10,7 @@ end
 
 local successes, fails = 0, 0
 local pstr = ""
+local startClock = os.clock()
 for _,path in files do
     local func = require("./tests/"..path)
     if type(func) ~= "function" then continue end
@@ -24,3 +25,4 @@ for _,path in files do
 end
 log(pstr)
 print(`SUCCESSFUL: {successes}\nFAILED: {fails}`)
+print(string.format("All tests finished in %.3f seconds!", os.clock()-startClock))
