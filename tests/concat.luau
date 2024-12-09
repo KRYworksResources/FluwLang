@@ -1,8 +1,8 @@
 local executor = require("./executor")
 local input = [[
-    def a = "hello" + "world";
-    def b = "my id is " + 5;
-    def c = 5 + " gnomes";
+    var a = "hello" + "world";
+    var b = "my id is " + 5;
+    var c = 5 + " gnomes";
 ]]
 local targetresults = {
     "helloworld",

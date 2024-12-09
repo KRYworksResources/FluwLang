@@ -1,7 +1,7 @@
 local executor = require("./executor")
 local input = [[
-    def a = true;
-    def b = false;
+    var a = true;
+    var b = false;
 ]]
 local targetresults = {
     true,

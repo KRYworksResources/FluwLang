@@ -42,8 +42,8 @@ local precedence = 0
 function Parser:parseStatement()
     local node
     precedence = 0
-    -- Check for variable definition (e.g., def x = 5;)
-    if self:currentToken().type == "KEYWORD" and self:currentToken().value == "def" then
+    -- Check for variable definition (e.g., var x = 5;)
+    if self:currentToken().type == "KEYWORD" and self:currentToken().value == "var" then
         node = self:parseVariableDefinition()
     else
         node = self:parseExpression()
@@ -59,9 +59,9 @@ function Parser:parseStatement()
     return node
 end
 function Parser:parseVariableDefinition()
-    self:advance() -- Consume 'def'
+    self:advance() -- Consume 'var'
     if self:currentToken().type ~= "IDENTIFIER" then
-        error("Expected variable name after 'def'")
+        error("Expected variable name after 'var'")
     end
     local varName = self:currentToken().value
     self:advance() -- Consume the identifier

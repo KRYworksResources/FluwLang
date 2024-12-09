@@ -1,10 +1,10 @@
 local executor = require("./executor")
 local input = [[
-    def a = true and false;
-    def b = false or true;
-    def c = 1 == 1;
-    def d = 1 < 2;
-    def e = true != true;
+    var a = true and false;
+    var b = false or true;
+    var c = 1 == 1;
+    var d = 1 < 2;
+    var e = true != true;
 ]]
 local targetresults = {
     false,

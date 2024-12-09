@@ -12,7 +12,7 @@ Lexer.TokenType = {
     EOF = "EOF",
 }
 Lexer.Keywords = {
-    ["def"] = true,
+    ["var"] = true,
     ["if"] = true,
     ["print"] = true,
     ["true"] = true,

@@ -1,9 +1,9 @@
 local executor = require("./executor")
 local input = [[
-    def a = -1 + 2;
-    def b = 10 * -1;
-    def c = a - b;
-    def d = -(8);
+    var a = -1 + 2;
+    var b = 10 * -1;
+    var c = a - b;
+    var d = -(8);
 ]]
 local targetresults = {
     1,
