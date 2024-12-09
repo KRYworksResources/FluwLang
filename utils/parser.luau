@@ -21,6 +21,8 @@ Parser.Operator = {
     [">>"] = 4, -- Bitwise Right Shift
     ["and"] = 1, -- AND operator
     ["or"] = 1, -- OR operator
+    ["&&"] = 1, -- AND operator
+    ["||"] = 1, -- OR operator
 }
 
 function Parser.new(tokens)
@@ -178,9 +180,14 @@ function Parser:parsePrimary()
         self:advance() -- Consume '~'
         local expression = self:parsePrimary()
         return { type = "UnaryExpression", operator = "~", value = expression }
+    elseif token.type == "OPERATOR" and (token.value == "not" or token.value == "!") then
+        -- Handle not call
+        self:advance() -- Consume 'not'
+        local expression = self:parsePrimary()
+        return { type = "UnaryExpression", operator = "not", value = expression }
     else
-        Error:error("Unexpected token: " .. (token.value or "EOF"))
-        error("Unexpected token: " .. (token.value or "EOF"))
+        Error:error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
+        error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
     end
 end
 
