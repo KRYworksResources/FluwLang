@@ -23,6 +23,7 @@ Lexer.Keywords = {
     ["false"] = true,
     ["const"] = true,
     ["null"] = true,
+    ["fn"] = true,
 }
 Lexer.Operators = {
     ["+"] = "ADD",

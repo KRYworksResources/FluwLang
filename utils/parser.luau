@@ -54,6 +54,8 @@ function Parser:parseStatement()
             node = self:parseVariableDefinition()
         elseif self:currentToken().value == "const" then
             node = self:parseConstDeclaration()
+        elseif self:currentToken().value == "fn" then
+            node = self:parseFunctionDeclaration()
         else
             error("Unknown keyword: " .. self:currentToken().value)
         end
@@ -64,7 +66,6 @@ function Parser:parseStatement()
     if self:currentToken().type == "SYMBOL" and self:currentToken().value == ";" then
         self:advance() -- Consume the semicolon
     else
-        print(node, self:currentToken())
         Error:error("Expected ';' at the end of statement")
         error("Expected ';' at the end of statement")
     end
@@ -97,6 +98,64 @@ function Parser:parseConstDeclaration()
     self:advance() -- Consume '='
     local value = self:parseExpression()
     return { type = "ConstDeclaration", name = constName, value = value }
+end
+function Parser:parseFunctionDeclaration()
+    self:advance()
+    -- Parse the function name
+    local nameToken = self:currentToken()
+    if nameToken.type ~= "IDENTIFIER" then
+        self:error("Expected function name after 'fn'")
+    end
+    self:advance()
+    local functionName = nameToken.value
+    -- Parse the parameter list
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "(" then
+        error("Expected '(' after function name")
+    end
+    self:advance() -- Consume '('
+    local parameters = {}
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
+        while true do
+            local paramToken = self:currentToken()
+            if paramToken.type ~= "IDENTIFIER" then
+                Error:error("Expected parameter name in function declaration")
+            end
+            self:advance()
+            table.insert(parameters, paramToken.value)
+            if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
+                self:advance()
+            else
+                break
+            end
+        end
+    end
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
+        error("Expected ')' after parameters")
+    end
+    self:advance() -- Consume ')'
+    -- Parse the function body
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
+        error("Expected '{' to start function body")
+    end
+    self:advance() -- Consume '{'
+    local body = {
+        type = "CodeBlock",
+        code = {}
+    } -- Parse statements inside the function body
+    while self:currentToken().value ~= "}" do
+        table.insert(body.code, self:parseStatement())
+    end
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
+        error("Expected '}' to end function body")
+    end
+    self:advance() -- Consume '}'
+    -- Return the function declaration AST node
+    return {
+        type = "FunctionDeclaration",
+        name = functionName,
+        arguments = parameters,
+        body = body,
+    }
 end
 
 function Parser:parseIfStatement()
@@ -276,19 +335,45 @@ function Parser:parsePrimary()
     elseif token.type == "IDENTIFIER" then
         self:advance()
         local next_token = self:currentToken()
-        if next_token.type == "SYMBOL" and next_token.value == "[" then
-            self:advance()
-            local index = self:parseExpression()
-            if not (self:currentToken().type == "SYMBOL" and self:currentToken().value == "]") then
-                Error:error("Expected closing ']' for indexing")
-                error("Expected closing ']' for indexing")
+        if next_token.type == "SYMBOL" then
+            if next_token.value == "[" then
+                self:advance()
+                local index = self:parseExpression()
+                if not (self:currentToken().type == "SYMBOL" and self:currentToken().value == "]") then
+                    Error:error("Expected closing ']' for indexing")
+                    error("Expected closing ']' for indexing")
+                end
+                self:advance()
+                return {
+                    type = "TableIndex",
+                    base = { type = "Identifier", value = token.value },
+                    index = index,
+                }
+            elseif next_token.value == "(" then
+                self:advance() -- Consume '('
+                local args = {}
+                if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
+                    while true do
+                        local paramToken = self:currentToken()
+                        self:advance()
+                        table.insert(args, paramToken.value)
+                        if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
+                            self:advance()
+                        else
+                            break
+                        end
+                    end
+                end
+                if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
+                    error("Expected ')' after arguments")
+                end
+                self:advance() -- Consume ')'
+                return {
+                    type = "FunctionCall",
+                    base = { type = "Identifier", value = token.value },
+                    args = args,
+                }
             end
-            self:advance()
-            return {
-                type = "TableIndex",
-                base = { type = "Identifier", value = token.value },
-                index = index,
-            }
         end
         return { type = "Identifier", value = token.value }
     elseif token.type == "KEYWORD" then
