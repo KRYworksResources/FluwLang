@@ -135,7 +135,7 @@ function Parser:parseIfStatement()
             table.insert(elseBlock.code, self:parseStatement())
         end
         self:advance() -- Consume '}'
-    elseif self:currentToken().value == "elif" then
+    elseif self:currentToken().value == "elif" or self:currentToken().value == "efra" then
         elseBlock = self:parseIfStatement() -- Parse 'elif' recursively
     end
     return {
