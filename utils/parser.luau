@@ -45,10 +45,16 @@ function Parser:parseStatement()
     local node
     precedence = 0
     -- Check for variable definition (e.g., var x = 5;)
-    if self:currentToken().type == "KEYWORD" and self:currentToken().value == "var" then
-        node = self:parseVariableDefinition()
-    elseif self:currentToken().type == "KEYWORD" and self:currentToken().value == "const" then
-        node = self:parseConstDeclaration()
+    if self:currentToken().type == "KEYWORD" then
+        if self:currentToken().value == "if" then
+            node = self:parseIfStatement()
+        elseif self:currentToken().value == "var" then
+            node = self:parseVariableDefinition()
+        elseif self:currentToken().value == "const" then
+            node = self:parseConstDeclaration()
+        else
+            error("Unknown keyword: " .. self:currentToken().value)
+        end
     else
         node = self:parseExpression()
     end
@@ -89,6 +95,55 @@ function Parser:parseConstDeclaration()
     self:advance() -- Consume '='
     local value = self:parseExpression()
     return { type = "ConstDeclaration", name = constName, value = value }
+end
+
+function Parser:parseIfStatement()
+    self:advance() -- Consume 'if'
+    if self:currentToken().value ~= "(" then
+        error("Expected '(' after 'if'")
+    end
+    self:advance() -- Consume '('
+    local condition = self:parseExpression() -- Parse the condition
+    if self:currentToken().value ~= ")" then
+        error("Expected ')' after condition")
+    end
+    self:advance() -- Consume ')'
+    if self:currentToken().value ~= "{" then
+        error("Expected '{' to start if block")
+    end
+    self:advance() -- Consume '{'
+    local thenBlock = {
+        type = "IfCodeBlock",
+        code = {}
+    } -- Parse statements inside the 'if' block
+    while self:currentToken().value ~= "}" do
+        table.insert(thenBlock.code, self:parseStatement())
+    end
+    self:advance() -- Consume '}'
+    local elseBlock = nil
+    if self:currentToken().value == "else" then
+        self:advance() -- Consume 'else'
+        if self:currentToken().value ~= "{" then
+            error("Expected '{' after 'else'")
+        end
+        self:advance() -- Consume '{'
+        elseBlock = {
+            type = "IfCodeBlock",
+            code = {}
+        }
+        while self:currentToken().value ~= "}" do
+            table.insert(elseBlock.code, self:parseStatement())
+        end
+        self:advance() -- Consume '}'
+    elseif self:currentToken().value == "elif" then
+        elseBlock = self:parseIfStatement() -- Parse 'elif' recursively
+    end
+    return {
+        type = "IfStatement",
+        condition = condition,
+        thenBlock = thenBlock,
+        elseBlock = elseBlock,
+    }
 end
 
 function Parser:parseExpression()

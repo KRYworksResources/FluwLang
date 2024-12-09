@@ -73,6 +73,21 @@ function Evaluator:evaluate(node)
             Error:error("Unknown operator: " .. node.operator)
             error("Unknown operator: " .. node.operator)
         end
+    elseif node.type == "IfStatement" then
+        local condition = self:evaluate(node.condition)
+        if condition then
+            return self:evaluate(node.thenBlock)
+        elseif node.elseBlock then
+            return self:evaluate(node.elseBlock)
+        end
+        return nil
+    elseif node.type == "IfCodeBlock" then
+        local results = {}
+        for _, block in node.code do
+            local value = self:evaluate(block)
+            table.insert(results, value)
+        end
+        return results
     elseif node.type == "AssignmentExpression" then
         if self.constants[node.variable] then
             Error:error("Constants can't be redeclared.")
@@ -105,15 +120,15 @@ function Evaluator:evaluate(node)
         self.constants[node.name] = value
         return value
     elseif node.type == "Identifier" then
-        local value = self.symbolTable[node.value] or self.constants[node.value]
-        if value == nil then
-            Error:error("Undefined identifier: " .. node.value)
-            error("Undefined identifier: " .. node.value)
+        if not (self.symbolExists[node.value] or self.constants[node.value]) then
+            Error:error(`Undefined identifier: '{node.value}'`)
+            error(`Undefined identifier: '{node.value}'`)
         end
+        local value = self.symbolTable[node.value] or self.constants[node.value]
         return value
     else
-        Error:error("Unknown node type: " .. node.type)
-        error("Unknown node type: " .. node.type)
+        Error:error(`Unknown node type: {node.type}`)
+        error(`Unknown node type: {node.type}`)
     end
 end
 
