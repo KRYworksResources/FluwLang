@@ -17,6 +17,7 @@ Lexer.Keywords = {
     ["print"] = true,
     ["true"] = true,
     ["false"] = true,
+    ["const"] = true,
 }
 Lexer.Operators = {
     ["+"] = "ADD",

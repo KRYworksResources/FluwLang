@@ -45,6 +45,8 @@ function Parser:parseStatement()
     -- Check for variable definition (e.g., var x = 5;)
     if self:currentToken().type == "KEYWORD" and self:currentToken().value == "var" then
         node = self:parseVariableDefinition()
+    elseif self:currentToken().type == "KEYWORD" and self:currentToken().value == "const" then
+        node = self:parseConstDeclaration()
     else
         node = self:parseExpression()
     end
@@ -71,6 +73,20 @@ function Parser:parseVariableDefinition()
     self:advance() -- Consume '='
     local value = self:parseExpression()
     return { type = "VariableDefinition", name = varName, value = value }
+end
+function Parser:parseConstDeclaration()
+    self:advance() -- Consume 'const'
+    if self:currentToken().type ~= "IDENTIFIER" then
+        error("Expected constant name after 'const'")
+    end
+    local constName = self:currentToken().value
+    self:advance() -- Consume the identifier
+    if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
+        error("Expected '=' after constant name")
+    end
+    self:advance() -- Consume '='
+    local value = self:parseExpression()
+    return { type = "ConstDeclaration", name = constName, value = value }
 end
 
 function Parser:parseExpression()

@@ -1,5 +1,8 @@
 local FS = require("@lune/fs")
 local files = FS.readDir("./tests/")
+local error = require("./utils/error")
+error.stderr = function(...) end
+error.stderr = function(...) end
 
 local function log(...)
     print("[TESTS]: ", ...)

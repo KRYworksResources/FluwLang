@@ -72,18 +72,41 @@ function Evaluator:evaluate(node)
             error("Unknown operator: " .. node.operator)
         end
     elseif node.type == "AssignmentExpression" then
+        if self.constants[node.variable] then
+            Error:error("Constants can't be redeclared.")
+            error("Constants can't be redeclared.")
+        elseif not self.symbolExists[node.variable] then
+            Error:error(`Variable '{node.variable}' is undefined.`)
+            error(`Variable '{node.variable}' is undefined.`)
+        end
         local value = self:evaluate(node.value)
         self.symbolTable[node.variable] = value
         return value
     elseif node.type == "VariableDefinition" then
+        if self.constants[node.name] then
+            Error:error(`A constant '{node.name}' is already declared before.`)
+            error(`A constant '{node.name}' is already declared before.`)
+        end
         local value = self:evaluate(node.value)
         self.symbolTable[node.name] = value
+        self.symbolExists[node.name] = true
+        return value
+    elseif node.type == "ConstDeclaration" then
+        if self.constants[node.name] then
+            Error:error(`Constant '{node.name}' is already declared.`)
+            error(`Constant '{node.name}' is already declared.`)
+        elseif self.symbolTable[node.name] then
+            Error:error(`A variable with name '{node.name}' is already defined.`)
+            error(`A variable with name '{node.name}' is already defined.`)
+        end
+        local value = self:evaluate(node.value)
+        self.constants[node.name] = value
         return value
     elseif node.type == "Identifier" then
-        local value = self.symbolTable[node.value]
+        local value = self.symbolTable[node.value] or self.constants[node.value]
         if value == nil then
-            Error:error("Undefined variable: " .. node.value)
-            error("Undefined variable: " .. node.value)
+            Error:error("Undefined identifier: " .. node.value)
+            error("Undefined identifier: " .. node.value)
         end
         return value
     else
@@ -94,7 +117,9 @@ end
 
 function Evaluator.new()
     local self = setmetatable({}, { __index = Evaluator })
+    self.symbolExists = {} -- Stores if a variable exists
     self.symbolTable = {} -- Stores variable names and values
+    self.constants = {} -- Stores constant names and values
     return self
 end
 
