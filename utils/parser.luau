@@ -56,6 +56,8 @@ function Parser:parseStatement()
             node = self:parseConstDeclaration()
         elseif self:currentToken().value == "fn" then
             node = self:parseFunctionDeclaration()
+        elseif self:currentToken().value == "return" then
+            node = self:parseReturnStatement()
         else
             error("Unknown keyword: " .. self:currentToken().value)
         end
@@ -140,6 +142,7 @@ function Parser:parseFunctionDeclaration()
     self:advance() -- Consume '{'
     local body = {
         type = "CodeBlock",
+        blocktype = "Callable",
         code = {}
     } -- Parse statements inside the function body
     while self:currentToken().value ~= "}" do
@@ -155,6 +158,23 @@ function Parser:parseFunctionDeclaration()
         name = functionName,
         arguments = parameters,
         body = body,
+    }
+end
+
+function Parser:parseReturnStatement()
+    self:advance() -- Consume 'return'
+    -- Parse the optional return value
+    local expression = nil
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ";" then
+        expression = self:parseExpression()
+    end
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ";" then
+        error("Expected ';' after return statement")
+    end
+    self:advance() -- Consume ';'
+    return {
+        type = "RETURN",
+        value = expression,
     }
 end
 
@@ -175,6 +195,7 @@ function Parser:parseIfStatement()
     self:advance() -- Consume '{'
     local thenBlock = {
         type = "CodeBlock",
+        blocktype = "Conditional",
         code = {}
     } -- Parse statements inside the 'if' block
     while self:currentToken().value ~= "}" do
@@ -190,6 +211,7 @@ function Parser:parseIfStatement()
         self:advance() -- Consume '{'
         elseBlock = {
             type = "CodeBlock",
+            blocktype = "Conditional",
             code = {}
         }
         while self:currentToken().value ~= "}" do
@@ -223,6 +245,7 @@ function Parser:parseWhileStatement()
     self:advance() -- Consume '{'
     local codeBlock = {
         type = "CodeBlock",
+        blocktype = "Conditional",
         code = {}
     } -- Parse statements inside the 'while' block
     while self:currentToken().value ~= "}" do
