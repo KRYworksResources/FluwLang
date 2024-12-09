@@ -152,6 +152,9 @@ function Parser:parsePrimary()
         if token.value == "true" or token.value == "false" then
             self:advance()
             return { type = "BooleanLiteral", value = token.value == "true" }
+        elseif token.value == "null" then
+            self:advance()
+            return { type = "NullPointer" }
         end
     elseif token.type == "SYMBOL" then
         self:advance()

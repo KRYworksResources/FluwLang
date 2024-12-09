@@ -7,10 +7,12 @@ local e = {
         local tokens = LexerUtils.parseStringToTokens(input)
         local evaluator = Evaluator.new()
         local parser = Parser.new(tokens)
+        local eval_id = 1
         while parser:currentToken().type ~= "EOF" do
             local ast = parser:parseStatement()
             local result = evaluator:evaluate(ast)
-            table.insert(results, result)
+            results[eval_id] = result
+            eval_id += 1
         end
         return results
     end,

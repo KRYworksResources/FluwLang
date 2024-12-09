@@ -7,7 +7,9 @@ function Evaluator:evaluate(node)
         error("Empty node given to evaluator")
         return
     end
-    if node.type == "BooleanLiteral" or node.type == "StringLiteral" then
+    if node.type == "NullPointer" then
+        return nil
+    elseif node.type == "BooleanLiteral" or node.type == "StringLiteral" then
         return node.value
     elseif node.type == "UnaryExpression" then
         local value = self:evaluate(node.value)
