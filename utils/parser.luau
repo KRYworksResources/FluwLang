@@ -275,6 +275,21 @@ function Parser:parsePrimary()
         return { type = "StringLiteral", value = token.value }
     elseif token.type == "IDENTIFIER" then
         self:advance()
+        local next_token = self:currentToken()
+        if next_token.type == "SYMBOL" and next_token.value == "[" then
+            self:advance()
+            local index = self:parseExpression()
+            if not (self:currentToken().type == "SYMBOL" and self:currentToken().value == "]") then
+                Error:error("Expected closing ']' for indexing")
+                error("Expected closing ']' for indexing")
+            end
+            self:advance()
+            return {
+                type = "TableIndex",
+                base = { type = "Identifier", value = token.value },
+                index = index,
+            }
+        end
         return { type = "Identifier", value = token.value }
     elseif token.type == "KEYWORD" then
         if token.value == "true" or token.value == "false" then
@@ -315,10 +330,9 @@ function Parser:parsePrimary()
         self:advance() -- Consume 'not'
         local expression = self:parsePrimary()
         return { type = "UnaryExpression", operator = "not", value = expression }
-    else
-        Error:error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
-        error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
     end
+    Error:error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
+    error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
 end
 
 return Parser

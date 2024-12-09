@@ -69,9 +69,13 @@ function Lexer.new(input)
     return self
 end
 
+-- Helper: Check if a character is a letter or a symbol
+local function isChar(char)
+    return char:match("[%a!%&*+%-[%]^_|=/<>%%]") ~= nil
+end
 -- Helper: Check if a character is a letter
 local function isLetter(char)
-    return char:match("[%a!%&*+%-[%]^_|=/<>%%]") ~= nil
+    return char:match("[%a]") ~= nil
 end
 -- Helper: Check if a character is a digit
 local function isDigit(char)
@@ -210,17 +214,16 @@ function Lexer:nextToken()
         return { type = Lexer.TokenType.OPERATOR, value = char }
     elseif char == "\"" or char == "'" then -- String literals
         return self:readString()
-    elseif isLetter(char) then -- Identifiers start with a letter
+    elseif isChar(char) then -- Identifiers start with a letter
         local word = self:readWord()
         if isOperator(word) then
             return { type = Lexer.TokenType.OPERATOR, value = word }
-        else
+        elseif isChar(char) then
             return self:readIdentifier(word)
         end
-    else
-        Error:error("Unexpected character: " .. char, nil, self.position)
-        error("Unexpected character: " .. char)
     end
+    Error:error("Unexpected character: " .. char, nil, self.position)
+    error("Unexpected character: " .. char)
 end
 
 return Lexer

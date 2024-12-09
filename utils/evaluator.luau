@@ -34,6 +34,10 @@ function Evaluator:evaluate(node)
             dict[key] = value
         end
         return dict
+    elseif node.type == "TableIndex" then
+        local table = self:evaluate(node.base)
+        local index = self:evaluate(node.index)
+        return table[index]
     elseif node.type == "NumberLiteral" then
         return node.value
     elseif node.type == "BinaryExpression" then
