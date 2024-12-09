@@ -7,7 +7,7 @@ function Evaluator:evaluate(node)
         error("Empty node given to evaluator")
         return
     end
-    if node.type == "BooleanLiteral" then
+    if node.type == "BooleanLiteral" or node.type == "StringLiteral" then
         return node.value
     elseif node.type == "UnaryExpression" then
         local value = self:evaluate(node.value)
@@ -23,7 +23,11 @@ function Evaluator:evaluate(node)
         local left = self:evaluate(node.left)
         local right = self:evaluate(node.right)
         if node.operator == "+" then
-            return left + right
+            if type(left) == "string" or type(right) == "string" then
+                return left .. right
+            else
+                return left + right
+            end
         elseif node.operator == "-" then
             return left - right
         elseif node.operator == "*" then

@@ -122,6 +122,9 @@ function Parser:parsePrimary()
     if token.type == "NUMBER" then
         self:advance()
         return { type = "NumberLiteral", value = token.value }
+    elseif token.type == "STRING" then
+        self:advance()
+        return { type = "StringLiteral", value = token.value }
     elseif token.type == "IDENTIFIER" then
         self:advance()
         return { type = "Identifier", value = token.value }

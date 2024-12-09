@@ -8,6 +8,7 @@ Lexer.TokenType = {
     PAREN = "PAREN",
     SYMBOL = "SYMBOL",
     KEYWORD = "KEYWORD",
+    STRING = "STRING",
     EOF = "EOF",
 }
 Lexer.Keywords = {
@@ -95,6 +96,41 @@ function Lexer:readWord()
     local word = self.input:sub(start, self.position - 1)
     return word
 end
+function Lexer:readString()
+    local quote = self:currentChar()
+    self:advance() -- Skip the opening quote
+    local value = ""
+
+    while self:currentChar() and self:currentChar() ~= quote do
+        if self:currentChar() == "\\" then -- Handle escape sequences
+            self:advance()
+            local escaped = self:currentChar()
+            if escaped == "n" then
+                value = value .. "\n"
+            elseif escaped == "t" then
+                value = value .. "\t"
+            elseif escaped == "\\" then
+                value = value .. "\\"
+            elseif escaped == "\"" or escaped == "'" then
+                value = value .. escaped
+            else
+                Error:error("Invalid escape sequence: \\" .. escaped, nil, self.position)
+                error("Invalid escape sequence: \\" .. escaped)
+            end
+        else
+            value ..= self:currentChar()
+        end
+        self:advance()
+    end
+
+    if self:currentChar() ~= quote then
+        Error:error("Unterminated string literal", nil, self.position)
+        error("Unterminated string literal")
+    end
+
+    self:advance() -- Skip the closing quote
+    return { type = Lexer.TokenType.STRING, value = value }
+end
 -- Read an identifier
 function Lexer:readIdentifier(identifier)
     if Lexer.Keywords[identifier] then
@@ -154,6 +190,8 @@ function Lexer:nextToken()
         end
         self:advance()
         return { type = Lexer.TokenType.OPERATOR, value = char }
+    elseif char == "\"" or char == "'" then -- String literals
+        return self:readString()
     elseif isLetter(char) then -- Identifiers start with a letter
         local word = self:readWord()
         if isOperator(word) then
