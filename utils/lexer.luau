@@ -23,7 +23,6 @@ Lexer.Operators = {
     ["-"] = "SUB",
     ["*"] = "MUL",
     ["/"] = "DIV",
-    ["^"] = "EXP",
     ["%"] = "MOD",
     ["="] = "ASG",
     ["=="] = "EQ",
@@ -35,6 +34,12 @@ Lexer.Operators = {
     ["and"] = "AND",
     ["or"] = "OR",
     ["not"] = "NOT",
+    ["&"] = "BAND",
+    ["|"] = "BOR",
+    ["^"] = "BXOR",
+    ["~"] = "BNOT",
+    ["<<"] = "BLSH",
+    [">>"] = "BRSH",
 }
 Lexer.Symbols = {
     ["("] = "PSTART",

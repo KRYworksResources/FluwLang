@@ -8,13 +8,17 @@ Parser.Operator = {
     ["*"] = 3, -- Multiplication
     ["/"] = 3, -- Division
     ["%"] = 3, -- Modulus
-    ["^"] = 4, -- Exponent
     ["<"] = 2, -- Smaller than
     [">"] = 2, -- Bigger than
     ["<="] = 2, -- Smaller than or equal to
     [">="] = 2, -- Bigger than or equal to
     ["=="] = 2, -- Equal to
     ["!="] = 2, -- Not equal to
+    ["^"] = 4, -- Bitwise XOR
+    ["&"] = 4, -- Bitwise AND
+    ["|"] = 4, -- Bitwise OR
+    ["<<"] = 4, -- Bitwise Left Shift
+    [">>"] = 4, -- Bitwise Right Shift
     ["and"] = 1, -- AND operator
     ["or"] = 1, -- OR operator
 }
@@ -150,6 +154,11 @@ function Parser:parsePrimary()
         self:advance() -- Consume '-'
         local expression = self:parsePrimary()
         return { type = "UnaryExpression", operator = "-", value = expression }
+    elseif token.type == "OPERATOR" and token.value == "~" then
+        -- Handle bitwise
+        self:advance() -- Consume '~'
+        local expression = self:parsePrimary()
+        return { type = "UnaryExpression", operator = "~", value = expression }
     else
         Error:error("Unexpected token: " .. (token.value or "EOF"))
         error("Unexpected token: " .. (token.value or "EOF"))

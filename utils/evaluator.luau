@@ -13,6 +13,7 @@ function Evaluator:evaluate(node)
         local value = self:evaluate(node.value)
         if node.operator == "-" then return -value
         elseif node.operator == "not" then return not value
+        elseif node.operator == "~" then return bit32.bnot(value)
         else
             Error:error("Unknown unary operator: " .. node.operator)
             error("Unknown unary operator: " .. node.operator)
@@ -34,8 +35,6 @@ function Evaluator:evaluate(node)
             return left * right
         elseif node.operator == "/" then
             return left / right
-        elseif node.operator == "^" then
-            return left ^ right
         elseif node.operator == "%" then
             return left % right
         elseif node.operator == "==" then
@@ -58,6 +57,16 @@ function Evaluator:evaluate(node)
             return left and right
         elseif node.operator == "||" then
             return left or right
+        elseif node.operator == "^" then
+            return bit32.bxor(left, right)
+        elseif node.operator == "&" then
+            return bit32.band(left, right)
+        elseif node.operator == "|" then
+            return bit32.bor(left, right)
+        elseif node.operator == "<<" then
+            return bit32.lshift(left, right)
+        elseif node.operator == ">>" then
+            return bit32.rshift(left, right)
         else
             Error:error("Unknown operator: " .. node.operator)
             error("Unknown operator: " .. node.operator)

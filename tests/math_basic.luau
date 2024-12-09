@@ -4,14 +4,12 @@ local input = [[
     2 - 2;
     2 / 2;
     2 * 2;
-    2 ^ 2;
     2 % 2;
 ]]
 local targetresults = {
     4,
     0,
     1,
-    4,
     4,
     0
 }
