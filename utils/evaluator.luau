@@ -3,8 +3,8 @@ local Error = require("error")
 
 function Evaluator:evaluate(node)
     if not node then
-        Error:error("Empty node given to evaluator")
-        error("Empty node given to evaluator")
+        Error:error("Nil node given to evaluator")
+        error("Nil node given to evaluator")
         return
     end
     if node.type == "NullPointer" then
@@ -81,7 +81,15 @@ function Evaluator:evaluate(node)
             return self:evaluate(node.elseBlock)
         end
         return nil
-    elseif node.type == "IfCodeBlock" then
+    elseif node.type == "WhileStatement" then
+        local condition = self:evaluate(node.condition)
+        local result = nil
+        while condition do
+            result = self:evaluate(node.codeBlock)
+            condition = self:evaluate(node.condition)
+        end
+        return result
+    elseif node.type == "CodeBlock" then
         local results = {}
         for _, block in node.code do
             local value = self:evaluate(block)

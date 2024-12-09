@@ -48,6 +48,8 @@ function Parser:parseStatement()
     if self:currentToken().type == "KEYWORD" then
         if self:currentToken().value == "if" then
             node = self:parseIfStatement()
+        elseif self:currentToken().value == "while" then
+            node = self:parseWhileStatement()
         elseif self:currentToken().value == "var" then
             node = self:parseVariableDefinition()
         elseif self:currentToken().value == "const" then
@@ -113,7 +115,7 @@ function Parser:parseIfStatement()
     end
     self:advance() -- Consume '{'
     local thenBlock = {
-        type = "IfCodeBlock",
+        type = "CodeBlock",
         code = {}
     } -- Parse statements inside the 'if' block
     while self:currentToken().value ~= "}" do
@@ -128,7 +130,7 @@ function Parser:parseIfStatement()
         end
         self:advance() -- Consume '{'
         elseBlock = {
-            type = "IfCodeBlock",
+            type = "CodeBlock",
             code = {}
         }
         while self:currentToken().value ~= "}" do
@@ -143,6 +145,35 @@ function Parser:parseIfStatement()
         condition = condition,
         thenBlock = thenBlock,
         elseBlock = elseBlock,
+    }
+end
+function Parser:parseWhileStatement()
+    self:advance() -- Consume 'while'
+    if self:currentToken().value ~= "(" then
+        error("Expected '(' after 'while'")
+    end
+    self:advance() -- Consume '('
+    local condition = self:parseExpression() -- Parse the condition
+    if self:currentToken().value ~= ")" then
+        error("Expected ')' after condition")
+    end
+    self:advance() -- Consume ')'
+    if self:currentToken().value ~= "{" then
+        error("Expected '{' to start while block")
+    end
+    self:advance() -- Consume '{'
+    local codeBlock = {
+        type = "CodeBlock",
+        code = {}
+    } -- Parse statements inside the 'while' block
+    while self:currentToken().value ~= "}" do
+        table.insert(codeBlock.code, self:parseStatement())
+    end
+    self:advance() -- Consume '}'
+    return {
+        type = "WhileStatement",
+        condition = condition,
+        codeBlock = codeBlock,
     }
 end
 

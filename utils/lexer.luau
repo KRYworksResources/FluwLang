@@ -17,6 +17,7 @@ Lexer.Keywords = {
     ["else"] = true,
     ["elif"] = true,
     ["efra"] = true,
+    ["while"] = true,
     ["print"] = true,
     ["true"] = true,
     ["false"] = true,
