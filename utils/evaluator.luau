@@ -20,6 +20,20 @@ function Evaluator:evaluate(node)
             Error:error("Unknown unary operator: " .. node.operator)
             error("Unknown unary operator: " .. node.operator)
         end
+    elseif node.type == "ArrayExpression" then
+        local array = {}
+        for _, elementNode in ipairs(node.elements) do
+            table.insert(array, self:evaluate(elementNode))
+        end
+        return array
+    elseif node.type == "DictExpression" then
+        local dict = {}
+        for k, v in node.pairs do
+            local key = self:evaluate(k)
+            local value = self:evaluate(v)
+            dict[key] = value
+        end
+        return dict
     elseif node.type == "NumberLiteral" then
         return node.value
     elseif node.type == "BinaryExpression" then

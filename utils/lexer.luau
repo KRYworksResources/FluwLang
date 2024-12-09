@@ -55,7 +55,11 @@ Lexer.Symbols = {
     [")"] = "PEND",
     [";"] = "SEMICOLON",
     ["{"] = "CBSTART",
-    ["}"] = "CBEND"
+    ["}"] = "CBEND",
+    ["["] = "SBSTART",
+    ["]"] = "SBEND",
+    [","] = "COMMA",
+    [":"] = "COLON",
 }
 
 function Lexer.new(input)

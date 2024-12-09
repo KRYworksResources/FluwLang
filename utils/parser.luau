@@ -181,6 +181,46 @@ function Parser:parseExpression()
     return self:parseAssignment()
 end
 
+-- Parse an array
+function Parser:parseArray()
+    local elements = {}
+    while self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "]" do
+        local element = self:parseExpression()
+        table.insert(elements, element)
+        if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
+            self:advance() -- Skip the ','
+        elseif self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "]" then
+            Error:error("Expected ',' or ']', but got " .. (self:currentToken().value or "EOF"), nil, self.position)
+            error("Parsing error")
+        end
+    end
+    self:advance() -- Skip the ']'
+    return { type = "ArrayExpression", elements = elements }
+end
+
+-- Parse a dictionary
+function Parser:parseDictionary()
+    local pairs = {}
+    while self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" do
+        local key = self:parseExpression()
+        if not (self:currentToken().type == "SYMBOL" and self:currentToken().value == ":") then
+            Error:error("Expected ':' after key in dictionary", nil, self.position)
+            error("Parsing error")
+        end
+        self:advance() -- Skip the ':'
+        local value = self:parseExpression()
+        pairs[key] = value
+        if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
+            self:advance() -- Skip the ','
+        elseif self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
+            Error:error("Expected ',' or '}', but got " .. (self:currentToken().value or "EOF"), nil, self.position)
+            error("Parsing error")
+        end
+    end
+    self:advance() -- Skip the '}'
+    return { type = "DictExpression", pairs = pairs }
+end
+
 -- Parse assignments (e.g., x = expression)
 function Parser:parseAssignment()
     local token = self:currentToken()
@@ -255,6 +295,10 @@ function Parser:parsePrimary()
                 error("Expected ')'")
             end
             return expression
+        elseif token.value == "[" then
+            return self:parseArray()
+        elseif token.value == "{" then
+            return self:parseDictionary()
         end
     elseif token.type == "OPERATOR" and token.value == "-" then
         -- Handle unary minus
