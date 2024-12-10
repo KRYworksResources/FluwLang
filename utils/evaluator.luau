@@ -200,7 +200,18 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         return nself:getResult()
     elseif node.type == "AssignmentExpression" then
         local value = self:evaluate(node.value, variables, definedsymbols)
-        self:setVariable(node.variable, value, variables, definedsymbols)
+        if node.target.type == "TableIndex" then
+            local table = self:evaluate(node.target.base, variables, definedsymbols)
+            local index = self:evaluate(node.target.index, variables, definedsymbols)
+            table[index] = value
+        elseif node.target.type == "Identifier" then
+            self:setVariable(node.target.value, value, variables, definedsymbols)
+        elseif type(node.target) == "string" then
+            self:setVariable(node.target, value, variables, definedsymbols)
+        else
+            Error:error(`Invalid assignee ({node.target.type}) given to assignment`)
+            error(`Invalid assignee ({node.target.type}) given to assignment`)
+        end
         return value
     elseif node.type == "VariableDefinition" then
         if self.constants[node.name] then

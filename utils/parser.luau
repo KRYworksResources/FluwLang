@@ -408,25 +408,36 @@ function Parser:parseDictionary()
     return { type = "DictExpression", pairs = pairs }
 end
 
--- Parse assignments (e.g., x = expression)
+-- Parse assignments (e.g., x = expression, table["key"] = value)
 function Parser:parseAssignment()
     local token = self:currentToken()
+    -- Parse the left-hand side (LHS)
+    local bt_pos = self.position
+    local lhs
     if token.type == "IDENTIFIER" then
-        local variableName = token.value
-        self:advance()
-        -- Check if it's an assignment
-        if self:currentToken().value == "=" then
-            self:advance()
-            local expression = self:parseExpression()
-            return { type = "AssignmentExpression", variable = variableName, value = expression }
-        else
-            -- Backtrack when it's not an assignment
-            self.position -= 1
-        end
+        self:advance() -- Consume the identifier
+        lhs = { type = "Identifier", value = token.value }
+        lhs = self:parseIdentifierExtensions(lhs) -- Handle recursive indexing (e.g., table["key"])
+    else
+        -- Not a valid assignment target
+        return self:parseBinaryExpression()
     end
-    -- Fall back to parsing as an expression
-    return self:parseBinaryExpression()
+    -- Check for assignment operator
+    if self:currentToken().type == "OPERATOR" and self:currentToken().value == "=" then
+        self:advance() -- Consume '='
+        local expression = self:parseExpression() -- Parse the right-hand side (RHS)
+        return {
+            type = "AssignmentExpression",
+            target = lhs,
+            value = expression,
+        }
+    else
+        -- Not an assignment; backtrack
+        self.position = bt_pos
+        return self:parseBinaryExpression()
+    end
 end
+
 
 -- Parse binary expressions
 function Parser:parseBinaryExpression()

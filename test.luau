@@ -1,4 +1,5 @@
 local FS = require("@lune/fs")
+local IO = require("@lune/stdio")
 local files = FS.readDir("./tests/")
 local error = require("./utils/error")
 error.stderr = function(...) end
@@ -17,12 +18,16 @@ for _,path in files do
     local success, err = pcall(func)
     if not success then
         fails += 1
+        IO.write(IO.color("red"))
         log(`{path} failed: {err}`)
+        IO.write(IO.color("reset"))
     else
         successes += 1
     end
-    pstr ..= if success then "." else "!"
+    pstr ..= if success then IO.color("green").."|" else IO.color("red").."!"
 end
 log(pstr)
-print(`SUCCESSFUL: {successes}\nFAILED: {fails}`)
+IO.write(IO.color("reset"))
+print(
+    `{IO.color("green")}SUCCESSFUL:{IO.color("reset")} {successes}\n{IO.color("red")}FAILED: {IO.color("reset")}{fails}`)
 print(string.format("All tests finished in %d ms!", (os.clock()-startClock)*1000))
