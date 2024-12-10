@@ -10,6 +10,7 @@ local function mix_tables(t1, t2)
 end
 
 function Evaluator:evaluate(node, variables, definedsymbols)
+    if self.result then return self.result end
     variables = variables or {}
     definedsymbols = definedsymbols or {}
     local function get_variable(name:string)
@@ -128,6 +129,40 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         end
         return result
     elseif node.type == "CodeBlock" then
+	if node.blocktype == "Callable" then
+	    local nself = Evaluator.new()
+	    nself.symbolTable = setmetatable(variables, {
+		__index = function(symbols, index)
+		    return self.symbolTable[index]
+		end,
+		__newindex = function(symbols, index, value)
+		    if symbol_exists(index) then
+			if self.constants[index] then
+           		     Error:error("Constants can't be redeclared.")
+            		    error("Constants can't be redeclared.")
+        		end
+        		self.symbolTable[node.variable] = value
+        		return value
+		    end
+		    symbols[index] = value
+		end
+	    })
+	    nself.symbolExists = setmetatable(variables, {                                                                                                     __index = function(symbols, index)
+                    return self.symbolTable[index]
+                end,
+                __newindex = function(symbols, index, value)
+                    if symbol_exists(index) then
+                        if self.constants[index] then
+                             Error:error("Constants can't be redeclared.")
+                            error("Constants can't be redeclared.")
+                        end
+                        self.symbolTable[node.variable] = value
+                        return value
+		    end
+                    symbols[index] = value
+                end
+            })
+	end
         local results = {}
         for _, block in node.code do
             local value = self:evaluate(block, variables, definedsymbols)
@@ -204,6 +239,7 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         return value
     elseif node.type == "ReturnExpression" then
 	local value = self:evaluate(node.value)
+	self.result = value
 	return value
     else
         Error:error(`Unknown node type: {node.type}`)
@@ -218,6 +254,7 @@ function Evaluator.new()
     self.constants = {} -- Stores constant names and values
     self.constantsExists = {} -- Stores if a constant exists
     self.symbolType = {} -- Stores the base type of symbols
+    self.result = nil -- Stores result given by a return statement
     return self
 end
 
