@@ -451,6 +451,69 @@ function Parser:parseBinaryExpression()
     end
     return left
 end
+function Parser:parseIdentifierExtensions(baseNode)
+    local currentNode = baseNode
+    while true do
+        local nextToken = self:currentToken()
+        if nextToken.type == "SYMBOL" and nextToken.value == "[" then
+            -- Handle `table[index]`
+            self:advance() -- Consume `[`
+            local index = self:parseExpression()
+            if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "]" then
+                Error:error("Expected closing ']' for indexing")
+                error("Expected closing ']' for indexing")
+            end
+            self:advance() -- Consume `]`
+            currentNode = {
+                type = "TableIndex",
+                base = currentNode,
+                index = index,
+            }
+        elseif nextToken.type == "SYMBOL" and nextToken.value == "." then
+            -- Handle `table.key`
+            self:advance() -- Consume `.`
+            if self:currentToken().type ~= "IDENTIFIER" then
+                Error:error("Expected identifier after '.'")
+                error("Expected identifier after '.'")
+            end
+            local key = self:currentToken().value
+            self:advance()
+            currentNode = {
+                type = "TableIndex",
+                base = currentNode,
+                index = { type = "StringLiteral", value = key },
+            }
+        elseif nextToken.type == "SYMBOL" and nextToken.value == "(" then
+            self:advance() -- Consume '('
+            local args = {}
+            if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
+                while true do
+                    local paramToken = self:currentToken()
+                    self:advance()
+                    table.insert(args, paramToken.value)
+                    if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
+                        self:advance()
+                    else
+                        break
+                    end
+                end
+            end
+            if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
+                error("Expected ')' after arguments")
+            end
+            self:advance() -- Consume ')'
+            return {
+                type = "FunctionCall",
+                base = currentNode,
+                args = args,
+            }
+        else
+            break -- No more extensions
+        end
+    end
+
+    return currentNode
+end
 -- Parse primary values (numbers, variables, parentheses)
 function Parser:parsePrimary()
     local token = self:currentToken()
@@ -462,61 +525,8 @@ function Parser:parsePrimary()
         return { type = "StringLiteral", value = token.value }
     elseif token.type == "IDENTIFIER" then
         self:advance()
-        local next_token = self:currentToken()
-        if next_token.type == "SYMBOL" then
-            if next_token.value == "[" then
-                self:advance()
-                local index = self:parseExpression()
-                if not (self:currentToken().type == "SYMBOL" and self:currentToken().value == "]") then
-                    Error:error("Expected closing ']' for indexing")
-                    error("Expected closing ']' for indexing")
-                end
-                self:advance()
-                return {
-                    type = "TableIndex",
-                    base = { type = "Identifier", value = token.value },
-                    index = index,
-                }
-            elseif next_token.value == "." then
-                self:advance() -- Consume '.'
-                if self:currentToken().type ~= "IDENTIFIER" then
-                    Error:error("Expected identifier after '.'")
-                    error("Expected identifier after '.'")
-                end
-                local index = self:currentToken().value
-                self:advance()
-                return {
-                    type = "TableIndex",
-                    base = { type = "Identifier", value = token.value },
-                    index = { type = "StringLiteral", value = index },
-                }
-            elseif next_token.value == "(" then
-                self:advance() -- Consume '('
-                local args = {}
-                if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
-                    while true do
-                        local paramToken = self:currentToken()
-                        self:advance()
-                        table.insert(args, paramToken.value)
-                        if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
-                            self:advance()
-                        else
-                            break
-                        end
-                    end
-                end
-                if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
-                    error("Expected ')' after arguments")
-                end
-                self:advance() -- Consume ')'
-                return {
-                    type = "FunctionCall",
-                    base = { type = "Identifier", value = token.value },
-                    args = args,
-                }
-            end
-        end
-        return { type = "Identifier", value = token.value }
+        local basenode = { type = "Identifier", value = token.value }
+        return self:parseIdentifierExtensions(basenode)
     elseif token.type == "KEYWORD" then
         if token.value == "true" or token.value == "false" then
             self:advance()
