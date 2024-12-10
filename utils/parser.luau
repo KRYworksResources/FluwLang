@@ -40,6 +40,15 @@ function Parser:advance()
     self.position += 1
 end
 local precedence = 0
+function Parser:expectSemicolon()
+    -- Ensure the statement ends with a semicolon
+    if self:currentToken().type == "SYMBOL" and self:currentToken().value == ";" then
+        self:advance() -- Consume the semicolon
+    else
+        Error:error("Expected ';' at the end of statement")
+        error("Expected ';' at the end of statement")
+    end
+end
 -- Parse statements and variable definitions
 function Parser:parseStatement()
     local node
@@ -58,19 +67,15 @@ function Parser:parseStatement()
             node = self:parseFunctionDeclaration()
         elseif self:currentToken().value == "return" then
             node = self:parseReturnStatement()
+        elseif self:currentToken().value == "for" then
+            node = self:parseForStatement()
         else
             error("Unknown keyword: " .. self:currentToken().value)
         end
     else
         node = self:parseExpression()
     end
-    -- Ensure the statement ends with a semicolon
-    if self:currentToken().type == "SYMBOL" and self:currentToken().value == ";" then
-        self:advance() -- Consume the semicolon
-    else
-        Error:error("Expected ';' at the end of statement")
-        error("Expected ';' at the end of statement")
-    end
+    self:expectSemicolon()
     return node
 end
 function Parser:parseVariableDefinition()
@@ -251,6 +256,56 @@ function Parser:parseWhileStatement()
     return {
         type = "WhileStatement",
         condition = condition,
+        codeBlock = codeBlock,
+    }
+end
+function Parser:parseForStatement()
+    self:advance() -- Consume 'for'
+    if self:currentToken().value ~= "(" then
+        error("Expected '(' after 'for'")
+    end
+    self:advance() -- Consume '('
+    if self:currentToken().value ~= "var" then
+        error("Expected variable defition after '('")
+    end
+    self:advance() -- Consume 'var'
+    if self:currentToken().type ~= "IDENTIFIER" then
+        error("Expected variable name after 'var'")
+    end
+    local varName = self:currentToken().value
+    self:advance() -- Consume the identifier
+    if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
+        error("Expected '=' after variable name")
+    end
+    self:advance() -- Consume '='
+    local value = self:parseExpression()
+    local var = { type = "TempVariableDefinition", name = varName, value = value }
+    self:expectSemicolon()
+    local condition = self:parseExpression() -- Parse the condition
+    self:expectSemicolon()
+    local operation = self:parseExpression() -- Parse the operation
+    if self:currentToken().value ~= ")" then
+        error("Expected ')' after condition")
+    end
+    self:advance() -- Consume ')'
+    if self:currentToken().value ~= "{" then
+        error("Expected '{' to start while block")
+    end
+    self:advance() -- Consume '{'
+    local codeBlock = {
+        type = "CodeBlock",
+        blocktype = "block",
+        code = {}
+    } -- Parse statements inside the 'while' block
+    while self:currentToken().value ~= "}" do
+        table.insert(codeBlock.code, self:parseStatement())
+    end
+    self:advance() -- Consume '}'
+    return {
+        type = "ForStatement",
+        definition = var,
+        condition = condition,
+        operation = operation,
         codeBlock = codeBlock,
     }
 end

@@ -18,13 +18,14 @@ Lexer.Keywords = {
     ["elif"] = true,
     ["efra"] = true,
     ["while"] = true,
-    ["print"] = true,
     ["true"] = true,
     ["false"] = true,
     ["const"] = true,
     ["null"] = true,
     ["fn"] = true,
     ["return"] = true,
+    ["for"] = true,
+    ["foreach"] = true,
 }
 Lexer.Operators = {
     ["+"] = "ADD",

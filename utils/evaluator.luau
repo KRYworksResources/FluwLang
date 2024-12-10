@@ -163,8 +163,17 @@ function Evaluator:evaluate(node, variables, definedsymbols)
     elseif node.type == "WhileStatement" then
         local condition = self:evaluate(node.condition, variables, definedsymbols)
         while condition and not self.resulted do
-            self:evaluate(node.codeBlock)
+            self:evaluate(node.codeBlock, variables, definedsymbols)
             condition = self:evaluate(node.condition, variables, definedsymbols)
+        end
+        return nil
+    elseif node.type == "ForStatement" then
+        self:evaluate(node.definition, variables, definedsymbols)
+        local condition = self:evaluate(node.condition, variables, definedsymbols)
+        while condition and not self.resulted do
+            condition = self:evaluate(node.condition, variables, definedsymbols)
+            self:evaluate(node.codeBlock, variables, definedsymbols)
+            self:evaluate(node.operation, variables, definedsymbols)
         end
         return nil
     elseif node.type == "CodeBlock" then
@@ -180,7 +189,7 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         return nself:getResult()
     elseif node.type == "AssignmentExpression" then
         local value = self:evaluate(node.value, variables, definedsymbols)
-        self:setVariable(node.variable, value)
+        self:setVariable(node.variable, value, variables, definedsymbols)
         return value
     elseif node.type == "VariableDefinition" then
         if self.constants[node.name] then
@@ -191,6 +200,15 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         self.symbolTable[node.name] = value
         self.symbolExists[node.name] = true
         self.symbolType[node.name] = "var"
+        return value
+    elseif node.type == "TempVariableDefinition" then
+        if self.constants[node.name] then
+            Error:error(`A constant '{node.name}' is already declared before.`)
+            error(`A constant '{node.name}' is already declared before.`)
+        end
+        local value = self:evaluate(node.value, variables, definedsymbols)
+        variables[node.name] = value
+        definedsymbols[node.name] = "tempvar"
         return value
     elseif node.type == "ConstDeclaration" then
         if self.constants[node.name] then

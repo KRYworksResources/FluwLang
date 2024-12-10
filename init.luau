@@ -15,4 +15,15 @@ function Fluw.evaluateExpression(input)
     return 0
 end
 
+function Fluw.executeString(input)
+    local tokens = LexerUtils.parseStringToTokens(input)
+    local evaluator = Evaluator.new()
+    local parser = Parser.new(tokens)
+    while parser:currentToken().type ~= "EOF" do
+        local ast = parser:parseStatement()
+        evaluator:evaluate(ast)
+    end
+    return evaluator:getResult()
+end
+
 return Fluw
