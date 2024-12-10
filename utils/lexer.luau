@@ -26,6 +26,7 @@ Lexer.Keywords = {
     ["return"] = true,
     ["for"] = true,
     ["foreach"] = true,
+    ["in"] = true,
 }
 Lexer.Operators = {
     ["+"] = "ADD",

@@ -176,6 +176,17 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             self:evaluate(node.operation, variables, definedsymbols)
         end
         return nil
+    elseif node.type == "ForEachStatement" then
+        self:evaluate(node.key, variables, definedsymbols)
+        self:evaluate(node.value, variables, definedsymbols)
+        local source = self:evaluate(node.source, variables, definedsymbols)
+        for k, v in source do
+            if self.resulted then break end
+            variables[node.key.name] = k
+            variables[node.value.name] = v
+            self:evaluate(node.codeBlock, variables, definedsymbols)
+        end
+        return nil
     elseif node.type == "CodeBlock" then
 	    local nself = Evaluator.new()
         nself.parent = self

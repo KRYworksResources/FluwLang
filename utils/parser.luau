@@ -69,6 +69,8 @@ function Parser:parseStatement()
             node = self:parseReturnStatement()
         elseif self:currentToken().value == "for" then
             node = self:parseForStatement()
+        elseif self:currentToken().value == "foreach" then
+            node = self:parseForEachStatement()
         else
             error("Unknown keyword: " .. self:currentToken().value)
         end
@@ -289,14 +291,14 @@ function Parser:parseForStatement()
     end
     self:advance() -- Consume ')'
     if self:currentToken().value ~= "{" then
-        error("Expected '{' to start while block")
+        error("Expected '{' to start for block")
     end
     self:advance() -- Consume '{'
     local codeBlock = {
         type = "CodeBlock",
         blocktype = "block",
         code = {}
-    } -- Parse statements inside the 'while' block
+    } -- Parse statements inside the 'for' block
     while self:currentToken().value ~= "}" do
         table.insert(codeBlock.code, self:parseStatement())
     end
@@ -306,6 +308,58 @@ function Parser:parseForStatement()
         definition = var,
         condition = condition,
         operation = operation,
+        codeBlock = codeBlock,
+    }
+end
+function Parser:parseForEachStatement()
+    self:advance() -- Consume 'for'
+    if self:currentToken().value ~= "(" then
+        error("Expected '(' after 'foreach'")
+    end
+    self:advance() -- Consume '('
+    if self:currentToken().type ~= "IDENTIFIER" then
+        error("Expected index identifier after '('")
+    end
+    local key_id = self:currentToken().value
+    self:advance() -- Consume the key
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "," then
+        error("Expected ',' after key name")
+    end
+    self:advance() -- Consume ','
+    if self:currentToken().type ~= "IDENTIFIER" then
+        error("Expected value identifier after key")
+    end
+    local value_id = self:currentToken().value
+    self:advance() -- Consume the value
+    if self:currentToken().type ~= "KEYWORD" or self:currentToken().value ~= "in" then
+        error("Expected 'in' after value name")
+    end
+    self:advance() -- Consume 'in'
+    local source = self:parseExpression()
+    if self:currentToken().value ~= ")" then
+        error("Expected ')' after condition")
+    end
+    self:advance() -- Consume ')'
+    if self:currentToken().value ~= "{" then
+        error("Expected '{' to start foreach block")
+    end
+    self:advance() -- Consume '{'
+    local codeBlock = {
+        type = "CodeBlock",
+        blocktype = "block",
+        code = {}
+    } -- Parse statements inside the 'foreach' block
+    while self:currentToken().value ~= "}" do
+        table.insert(codeBlock.code, self:parseStatement())
+    end
+    local key = { type = "TempVariableDefinition", name = key_id, value = { type = "NullPointer" } }
+    local value = { type = "TempVariableDefinition", name = value_id, value = { type = "NullPointer" } }
+    self:advance() -- Consume '}'
+    return {
+        type = "ForEachStatement",
+        key = key,
+        value = value,
+        source = source,
         codeBlock = codeBlock,
     }
 end
