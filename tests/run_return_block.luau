@@ -1,11 +1,14 @@
 local executor = require("./executor")
 local input = [[
-    fn a(b, c) {
-        return b + c;
+    var i = 1;
+    while (true) {
+        i = i + 1;
+        if (i > 5) {
+            return i;
+        };
     };
-    return a(1, 2);
 ]]
-local targetresult = 3
+local targetresult = 6
 return function()
     local result = executor.run(input)
     assert(result == targetresult, "Assertion failed!")

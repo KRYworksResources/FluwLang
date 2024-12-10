@@ -7,9 +7,7 @@ local input = [[
 ]]
 local targetresults = {
     0,
-    {
-        5
-    }
+    nil
 }
 return function()
     local results = executor.exec(input)

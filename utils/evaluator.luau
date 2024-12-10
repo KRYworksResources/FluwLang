@@ -9,15 +9,55 @@ local function mix_tables(t1, t2)
     return base
 end
 
+function Evaluator:getValue(id:string, symbols)
+    symbols = symbols or {}
+    local value = symbols[id] or self.symbolTable[id] or self.constants[id]
+    if not value and self.parent then
+        local prnt = self.parent
+        value = prnt:getValue(id)
+    end
+    return value
+end
+function Evaluator:doesSymbolExist(id:string, symbols)
+    symbols = symbols or {}
+    local value = symbols[id] or self.symbolExists[id] or self.constantsExists[id]
+    if not value and self.parent then
+        local prnt = self.parent
+        value = prnt:doesSymbolExist(id)
+    end
+    return value
+end
+function Evaluator:setVariable(id:string, value:any, symval, symdef)
+    symval = symval or {}
+    symdef = symdef or {}
+    if self.constantsExists[id] then
+        Error:error("Constants can't be redeclared.")
+        error("Constants can't be redeclared.")
+    elseif not (self.symbolExists[id] or symdef[id]) then
+        if self.parent then
+            local prnt = self.parent
+            if prnt:doesSymbolExist(id) then
+                prnt:setVariable(id, value)
+                return
+            end
+        end
+        Error:error(`Variable '{id}' is undefined.`)
+        error(`Variable '{id}' is undefined.`)
+    end
+    local target_write = if symdef[id] then symval else self.symbolTable
+    target_write[id] = value
+    return value
+end
+
 function Evaluator:evaluate(node, variables, definedsymbols)
-    if self.result then return self.result end
+    if self.resulted then return self.result end
     variables = variables or {}
     definedsymbols = definedsymbols or {}
     local function get_variable(name:string)
-        return variables[name] or self.symbolTable[name] or self.constants[name]
+        return self:getValue(name, variables)
     end
     local function symbol_exists(name:string)
-        return definedsymbols[name] or self.symbolExists[name] or self.constantsExists[name]
+        return self:doesSymbolExist(name, definedsymbols)
     end
     if not node then
         Error:error("Nil node given to evaluator")
@@ -29,7 +69,7 @@ function Evaluator:evaluate(node, variables, definedsymbols)
     elseif node.type == "BooleanLiteral" or node.type == "StringLiteral" then
         return node.value
     elseif node.type == "UnaryExpression" then
-        local value = self:evaluate(node.value)
+        local value = self:evaluate(node.value, variables, definedsymbols)
         if node.operator == "-" then return -value
         elseif node.operator == "not" then return not value
         elseif node.operator == "~" then return bit32.bnot(value)
@@ -40,30 +80,30 @@ function Evaluator:evaluate(node, variables, definedsymbols)
     elseif node.type == "ArrayExpression" then
         local array = {}
         for _, elementNode in ipairs(node.elements) do
-            table.insert(array, self:evaluate(elementNode))
+            table.insert(array, self:evaluate(elementNode, variables, definedsymbols))
         end
         return array
     elseif node.type == "DictExpression" then
         local dict = {}
         for k, v in node.pairs do
-            local key = self:evaluate(k)
-            local value = self:evaluate(v)
+            local key = self:evaluate(k, variables, definedsymbols)
+            local value = self:evaluate(v, variables, definedsymbols)
             dict[key] = value
         end
         return dict
     elseif node.type == "TableIndex" then
-        local table = self:evaluate(node.base)
+        local table = self:evaluate(node.base, variables, definedsymbols)
         if self.symbolType[node.value] == "fn" then
             Error:error("Can't index a function value.")
             error("Can't index a function value.")
         end
-        local index = self:evaluate(node.index)
+        local index = self:evaluate(node.index, variables, definedsymbols)
         return table[index]
     elseif node.type == "NumberLiteral" then
         return node.value
     elseif node.type == "BinaryExpression" then
-        local left = self:evaluate(node.left)
-        local right = self:evaluate(node.right)
+        local left = self:evaluate(node.left, variables, definedsymbols)
+        local right = self:evaluate(node.right, variables, definedsymbols)
         if node.operator == "+" then
             if type(left) == "string" or type(right) == "string" then
                 return left .. right
@@ -113,79 +153,41 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             error("Unknown operator: " .. node.operator)
         end
     elseif node.type == "IfStatement" then
-        local condition = self:evaluate(node.condition)
+        local condition = self:evaluate(node.condition, variables, definedsymbols)
         if condition then
-            return self:evaluate(node.thenBlock)
+            self:evaluate(node.thenBlock, variables, definedsymbols)
         elseif node.elseBlock then
-            return self:evaluate(node.elseBlock)
+            self:evaluate(node.elseBlock, variables, definedsymbols)
         end
         return nil
     elseif node.type == "WhileStatement" then
-        local condition = self:evaluate(node.condition)
-        local result = nil
-        while condition do
-            result = self:evaluate(node.codeBlock)
-            condition = self:evaluate(node.condition)
+        local condition = self:evaluate(node.condition, variables, definedsymbols)
+        while condition and not self.resulted do
+            self:evaluate(node.codeBlock)
+            condition = self:evaluate(node.condition, variables, definedsymbols)
         end
-        return result
+        return nil
     elseif node.type == "CodeBlock" then
-	if node.blocktype == "Callable" then
 	    local nself = Evaluator.new()
-	    nself.symbolTable = setmetatable(variables, {
-		__index = function(symbols, index)
-		    return self.symbolTable[index]
-		end,
-		__newindex = function(symbols, index, value)
-		    if symbol_exists(index) then
-			if self.constants[index] then
-           		     Error:error("Constants can't be redeclared.")
-            		    error("Constants can't be redeclared.")
-        		end
-        		self.symbolTable[node.variable] = value
-        		return value
-		    end
-		    symbols[index] = value
-		end
-	    })
-	    nself.symbolExists = setmetatable(variables, {                                                                                                     __index = function(symbols, index)
-                    return self.symbolTable[index]
-                end,
-                __newindex = function(symbols, index, value)
-                    if symbol_exists(index) then
-                        if self.constants[index] then
-                             Error:error("Constants can't be redeclared.")
-                            error("Constants can't be redeclared.")
-                        end
-                        self.symbolTable[node.variable] = value
-                        return value
-		    end
-                    symbols[index] = value
-                end
-            })
-	end
-        local results = {}
+        nself.parent = self
         for _, block in node.code do
-            local value = self:evaluate(block, variables, definedsymbols)
-            table.insert(results, value)
+            nself:evaluate(block, variables, definedsymbols)
         end
-        return results
+        if node.blocktype == "block" and nself.resulted then
+            self.resulted = true
+            self.result = nself.result
+        end
+        return nself:getResult()
     elseif node.type == "AssignmentExpression" then
-        if self.constants[node.variable] then
-            Error:error("Constants can't be redeclared.")
-            error("Constants can't be redeclared.")
-        elseif not symbol_exists(node.variable) then
-            Error:error(`Variable '{node.variable}' is undefined.`)
-            error(`Variable '{node.variable}' is undefined.`)
-        end
-        local value = self:evaluate(node.value)
-        self.symbolTable[node.variable] = value
+        local value = self:evaluate(node.value, variables, definedsymbols)
+        self:setVariable(node.variable, value)
         return value
     elseif node.type == "VariableDefinition" then
         if self.constants[node.name] then
             Error:error(`A constant '{node.name}' is already declared before.`)
             error(`A constant '{node.name}' is already declared before.`)
         end
-        local value = self:evaluate(node.value)
+        local value = self:evaluate(node.value, variables, definedsymbols)
         self.symbolTable[node.name] = value
         self.symbolExists[node.name] = true
         self.symbolType[node.name] = "var"
@@ -198,7 +200,7 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             Error:error(`A variable with name '{node.name}' is already defined.`)
             error(`A variable with name '{node.name}' is already defined.`)
         end
-        local value = self:evaluate(node.value)
+        local value = self:evaluate(node.value, variables, definedsymbols)
         self.constants[node.name] = value
         self.constantsExists[node.name] = true
         self.symbolType[node.name] = "const"
@@ -218,7 +220,7 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         self.symbolType[node.name] = "fn"
         return
     elseif node.type == "FunctionCall" then
-        local fn = self:evaluate(node.base)
+        local fn = self:evaluate(node.base, variables, definedsymbols)
         if self.symbolType[node.base.value] ~= "fn" then
             Error:error("Can't call a non-function value.")
             error("Can't call a non-function value.")
@@ -238,13 +240,18 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         local value = get_variable(node.value)
         return value
     elseif node.type == "ReturnExpression" then
-	local value = self:evaluate(node.value)
+	local value = self:evaluate(node.value, variables, definedsymbols)
+    self.resulted = true
 	self.result = value
 	return value
     else
         Error:error(`Unknown node type: {node.type}`)
         error(`Unknown node type: {node.type}`)
     end
+end
+
+function Evaluator:getResult()
+    return self.result
 end
 
 function Evaluator.new()
@@ -255,6 +262,8 @@ function Evaluator.new()
     self.constantsExists = {} -- Stores if a constant exists
     self.symbolType = {} -- Stores the base type of symbols
     self.result = nil -- Stores result given by a return statement
+    self.resulted = false -- Is this evaluator finished?
+    self.parent = nil -- Parent scope evaluator
     return self
 end
 

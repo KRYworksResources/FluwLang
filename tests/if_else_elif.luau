@@ -18,14 +18,8 @@ local input = [[
 ]]
 local targetresults = {
     false, 
-    {
-        true,
-        false
-    },
-    {
-        false,
-        true
-    }
+    nil,
+    nil
 }
 return function()
     local results = executor.exec(input)

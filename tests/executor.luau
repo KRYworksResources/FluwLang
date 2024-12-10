@@ -17,6 +17,16 @@ e = {
         end
         return results
     end,
+    run = function(input)
+        local tokens = LexerUtils.parseStringToTokens(input)
+        local evaluator = Evaluator.new()
+        local parser = Parser.new(tokens)
+        while parser:currentToken().type ~= "EOF" do
+            local ast = parser:parseStatement()
+            evaluator:evaluate(ast)
+        end
+        return evaluator:getResult()
+    end,
     compare_tables = function(t1, t2)
         for k, v in t1 do
             if type(v) == "table" then

@@ -142,7 +142,7 @@ function Parser:parseFunctionDeclaration()
     self:advance() -- Consume '{'
     local body = {
         type = "CodeBlock",
-        blocktype = "Callable",
+        blocktype = "contained",
         code = {}
     } -- Parse statements inside the function body
     while self:currentToken().value ~= "}" do
@@ -191,7 +191,7 @@ function Parser:parseIfStatement()
     self:advance() -- Consume '{'
     local thenBlock = {
         type = "CodeBlock",
-        blocktype = "Conditional",
+        blocktype = "block",
         code = {}
     } -- Parse statements inside the 'if' block
     while self:currentToken().value ~= "}" do
@@ -207,7 +207,7 @@ function Parser:parseIfStatement()
         self:advance() -- Consume '{'
         elseBlock = {
             type = "CodeBlock",
-            blocktype = "Conditional",
+            blocktype = "block",
             code = {}
         }
         while self:currentToken().value ~= "}" do
@@ -241,7 +241,7 @@ function Parser:parseWhileStatement()
     self:advance() -- Consume '{'
     local codeBlock = {
         type = "CodeBlock",
-        blocktype = "Conditional",
+        blocktype = "block",
         code = {}
     } -- Parse statements inside the 'while' block
     while self:currentToken().value ~= "}" do

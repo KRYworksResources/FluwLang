@@ -1,11 +1,11 @@
 local executor = require("./executor")
 local input = [[
-    fn a(b, c) {
-        return b + c;
+    fn contained() {
+        return 1;
     };
-    return a(1, 2);
-]]
-local targetresult = 3
+    contained();
+]] -- we dont return values so it should be nil
+local targetresult = nil
 return function()
     local result = executor.run(input)
     assert(result == targetresult, "Assertion failed!")

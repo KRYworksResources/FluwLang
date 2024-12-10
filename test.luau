@@ -25,4 +25,4 @@ for _,path in files do
 end
 log(pstr)
 print(`SUCCESSFUL: {successes}\nFAILED: {fails}`)
-print(string.format("All tests finished in %.3f seconds!", os.clock()-startClock))
+print(string.format("All tests finished in %d ms!", (os.clock()-startClock)*1000))

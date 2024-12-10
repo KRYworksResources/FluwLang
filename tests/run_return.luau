@@ -4,6 +4,6 @@ local input = [[
 ]]
 local targetresult = 1
 return function()
-    local result = executor.exec(input)[1]
+    local result = executor.run(input)
     assert(result == targetresult)
 end
