@@ -220,7 +220,7 @@ function Lexer:nextToken()
         local word = self:readWord()
         if isOperator(word) then
             return { type = Lexer.TokenType.OPERATOR, value = word }
-        elseif isChar(char) then
+        elseif isLetter(char) then
             return self:readIdentifier(word)
         end
     end
