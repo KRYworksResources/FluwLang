@@ -477,6 +477,19 @@ function Parser:parsePrimary()
                     base = { type = "Identifier", value = token.value },
                     index = index,
                 }
+            elseif next_token.value == "." then
+                self:advance() -- Consume '.'
+                if self:currentToken().type ~= "IDENTIFIER" then
+                    Error:error("Expected identifier after '.'")
+                    error("Expected identifier after '.'")
+                end
+                local index = self:currentToken().value
+                self:advance()
+                return {
+                    type = "TableIndex",
+                    base = { type = "Identifier", value = token.value },
+                    index = { type = "StringLiteral", value = index },
+                }
             elseif next_token.value == "(" then
                 self:advance() -- Consume '('
                 local args = {}

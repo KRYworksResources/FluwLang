@@ -64,6 +64,7 @@ Lexer.Symbols = {
     ["]"] = "SBEND",
     [","] = "COMMA",
     [":"] = "COLON",
+    ["."] = "DOT",
 }
 
 function Lexer.new(input)
@@ -79,7 +80,7 @@ local function isChar(char)
 end
 -- Helper: Check if a character is a letter
 local function isLetter(char)
-    return char:match("[%a]") ~= nil
+    return char:match("[%a_]") ~= nil
 end
 -- Helper: Check if a character is a digit
 local function isDigit(char)

@@ -4,12 +4,14 @@ local input = [[
         "key": "value"
     };
     var b = a["key"];
+    var c = a.key;
 ]]
 local targetresults = {
     {
         key = "value"
     },
-    "value"
+    "value",
+    "value",
 }
 return function()
     local results = executor.exec(input)
