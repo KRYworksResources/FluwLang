@@ -202,6 +202,9 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         end
         local value = get_variable(node.value)
         return value
+    elseif node.type == "ReturnExpression" then
+	local value = self:evaluate(node.value)
+	return value
     else
         Error:error(`Unknown node type: {node.type}`)
         error(`Unknown node type: {node.type}`)

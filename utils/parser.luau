@@ -168,12 +168,8 @@ function Parser:parseReturnStatement()
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ";" then
         expression = self:parseExpression()
     end
-    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ";" then
-        error("Expected ';' after return statement")
-    end
-    self:advance() -- Consume ';'
     return {
-        type = "RETURN",
+        type = "ReturnExpression",
         value = expression,
     }
 end
