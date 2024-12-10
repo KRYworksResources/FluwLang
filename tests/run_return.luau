@@ -5,5 +5,5 @@ local input = [[
 local targetresult = 1
 return function()
     local result = executor.run(input)
-    assert(result == targetresult)
+    assert(result == targetresult, "Assertion failed!")
 end
