@@ -423,19 +423,31 @@ function Parser:parseAssignment()
         return self:parseBinaryExpression()
     end
     -- Check for assignment operator
-    if self:currentToken().type == "OPERATOR" and self:currentToken().value == "=" then
-        self:advance() -- Consume '='
-        local expression = self:parseExpression() -- Parse the right-hand side (RHS)
-        return {
-            type = "AssignmentExpression",
-            target = lhs,
-            value = expression,
-        }
-    else
-        -- Not an assignment; backtrack
-        self.position = bt_pos
-        return self:parseBinaryExpression()
+    if self:currentToken().type == "OPERATOR" then
+        local operator = self:currentToken().value
+        self:advance() -- Consume operator
+        if operator == "=" then
+            local expression = self:parseExpression() -- Parse the right-hand side (RHS)
+            return {
+                type = "AssignmentExpression",
+                target = lhs,
+                value = expression,
+            }
+        elseif operator:match("^[%+%-*/%%]=") then
+            -- Compound assignment (e.g., +=, -=, etc.)
+            local expression = self:parseExpression() -- Parse the RHS
+            local compoundOperator = operator:sub(1, string.len(operator) - 1) -- Extract the operator (e.g., "+" from "+=")
+            return {
+                type = "CompoundAssignmentExpression",
+                target = lhs,
+                operator = compoundOperator,
+                value = expression,
+            }
+        end
     end
+    -- Not an assignment; backtrack
+    self.position = bt_pos
+    return self:parseBinaryExpression()
 end
 
 

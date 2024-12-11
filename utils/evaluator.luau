@@ -197,6 +197,35 @@ local node_type_cases = {
         end
         return value
     end,
+    ["CompoundAssignmentExpression"] = function(self, node, variables, definedsymbols)
+        local value = self:evaluate(node.value, variables, definedsymbols)
+        if node.target.type == "TableIndex" then
+            local table = self:evaluate(node.target.base, variables, definedsymbols)
+            local index = self:evaluate(node.target.index, variables, definedsymbols)
+            table[index] = switch_case(node.operator, binary_expression_cases, function()
+                Error:error("Unsupported operator in compound assignment: " .. node.operator)
+                error("Unsupported operator in compound assignment: " .. node.operator)
+            end, table[index], value)
+        elseif node.target.type == "Identifier" then
+            local current = self:getValue(node.target.value, variables)
+            local target_value = switch_case(node.operator, binary_expression_cases, function()
+                Error:error("Unsupported operator in compound assignment: " .. node.operator)
+                error("Unsupported operator in compound assignment: " .. node.operator)
+            end, current, value)
+            self:setVariable(node.target.value, target_value, variables, definedsymbols)
+        elseif type(node.target) == "string" then
+            local current = self:getValue(node.target, variables)
+            local target_value = switch_case(node.operator, binary_expression_cases, function()
+                Error:error("Unsupported operator in compound assignment: " .. node.operator)
+                error("Unsupported operator in compound assignment: " .. node.operator)
+            end, current, value)
+            self:setVariable(node.target, target_value, variables, definedsymbols)
+        else
+            Error:error(`Invalid assignee ({node.target.type}) given to assignment`)
+            error(`Invalid assignee ({node.target.type}) given to assignment`)
+        end
+        return value
+    end,
     ["VariableDefinition"] = function(self, node, variables, definedsymbols)
         if self.constants[node.name] then
             Error:error(`A constant '{node.name}' is already declared before.`)

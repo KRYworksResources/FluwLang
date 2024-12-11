@@ -53,6 +53,11 @@ Lexer.Operators = {
     ["~"] = "BNOT",
     ["<<"] = "BLSH",
     [">>"] = "BRSH",
+    ["+="] = "COMADD",
+    ["-="] = "COMSUB",
+    ["/="] = "COMDIV",
+    ["*="] = "COMMUL",
+    ["%="] = "COMMOD",
 }
 Lexer.Symbols = {
     ["("] = "PSTART",
