@@ -3,7 +3,9 @@ local input = [[
     var i = 1;
     i += 1;
     i -= 2;
-    return i == 0;
+    var t = {"n": 1};
+    t.n *= 10;
+    return (t.n == 10) and (i == 0);
 ]]
 local targetresult = true
 return function()
