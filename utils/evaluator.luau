@@ -49,26 +49,49 @@ function Evaluator:setVariable(id:string, value:any, symval, symdef)
     return value
 end
 
-function Evaluator:evaluate(node, variables, definedsymbols)
-    if self.resulted then return self.result end
-    variables = variables or {}
-    definedsymbols = definedsymbols or {}
-    local function get_variable(name:string)
-        return self:getValue(name, variables)
-    end
-    local function symbol_exists(name:string)
-        return self:doesSymbolExist(name, definedsymbols)
-    end
-    if not node then
-        Error:error("Nil node given to evaluator")
-        error("Nil node given to evaluator")
-        return
-    end
-    if node.type == "NullPointer" then
+local function switch_case(var, cases, default, ...)
+    local f = cases[var] or default
+    if not f then return end
+    return f(...)
+end
+
+local binary_expression_cases = {
+    ["+"] = function(left, right)
+        if type(left) == "string" or type(right) == "string" then
+            return left .. right
+        else
+            return left + right
+        end
+    end,
+    ["-"] = function(left, right) return left - right end,
+    ["*"] = function(left, right) return left * right end,
+    ["/"] = function(left, right) return left / right end,
+    ["%"] = function(left, right) return left % right end,
+    ["=="] = function(left, right) return left == right end,
+    ["!="] = function(left, right) return left ~= right end,
+    ["<"] = function(left, right) return left < right end,
+    [">"] = function(left, right) return left > right end,
+    ["<="] = function(left, right) return left <= right end,
+    [">="] = function(left, right) return left >= right end,
+    ["and"] = function(left, right) return left and right end,
+    ["or"] = function(left, right) return left or right end,
+    ["&&"] = function(left, right) return left and right end,
+    ["||"] = function(left, right) return left or right end,
+    ["^"] = function(left, right) return bit32.bxor(left, right) end,
+    ["&"] = function(left, right) return bit32.band(left, right) end,
+    ["|"] = function(left, right) return bit32.bor(left, right) end,
+    ["<<"] = function(left, right) return bit32.lshift(left, right) end,
+    [">>"] = function(left, right) return bit32.rshift(left, right) end,
+}
+
+local node_type_cases = {
+    ["NullPointer"] = function(_self, _node, _variables, _definedsymbols)
         return nil
-    elseif node.type == "BooleanLiteral" or node.type == "StringLiteral" then
-        return node.value
-    elseif node.type == "UnaryExpression" then
+    end,
+    ["Literal"] = function(_self, _node, _variables, _definedsymbols)
+        return _node.value
+    end,
+    ["UnaryExpression"] = function(self, node, variables, definedsymbols)
         local value = self:evaluate(node.value, variables, definedsymbols)
         if node.operator == "-" then return -value
         elseif node.operator == "not" then return not value
@@ -77,13 +100,15 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             Error:error("Unknown unary operator: " .. node.operator)
             error("Unknown unary operator: " .. node.operator)
         end
-    elseif node.type == "ArrayExpression" then
+    end,
+    ["ArrayExpression"] = function(self, node, variables, definedsymbols)
         local array = {}
         for _, elementNode in ipairs(node.elements) do
             table.insert(array, self:evaluate(elementNode, variables, definedsymbols))
         end
         return array
-    elseif node.type == "DictExpression" then
+    end,
+    ["DictExpression"] = function(self, node, variables, definedsymbols)
         local dict = {}
         for k, v in node.pairs do
             local key = self:evaluate(k, variables, definedsymbols)
@@ -91,7 +116,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             dict[key] = value
         end
         return dict
-    elseif node.type == "TableIndex" then
+    end,
+    ["TableIndex"] = function(self, node, variables, definedsymbols)
         local table = self:evaluate(node.base, variables, definedsymbols)
         if self.symbolType[node.value] == "fn" then
             Error:error("Can't index a function value.")
@@ -99,75 +125,31 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         end
         local index = self:evaluate(node.index, variables, definedsymbols)
         return table[index]
-    elseif node.type == "NumberLiteral" then
-        return node.value
-    elseif node.type == "BinaryExpression" then
+    end,
+    ["BinaryExpression"] = function(self, node, variables, definedsymbols)
         local left = self:evaluate(node.left, variables, definedsymbols)
         local right = self:evaluate(node.right, variables, definedsymbols)
-        if node.operator == "+" then
-            if type(left) == "string" or type(right) == "string" then
-                return left .. right
-            else
-                return left + right
-            end
-        elseif node.operator == "-" then
-            return left - right
-        elseif node.operator == "*" then
-            return left * right
-        elseif node.operator == "/" then
-            return left / right
-        elseif node.operator == "%" then
-            return left % right
-        elseif node.operator == "==" then
-            return left == right
-        elseif node.operator == "!=" then
-            return left ~= right
-        elseif node.operator == "<" then
-            return left < right
-        elseif node.operator == ">" then
-            return left > right
-        elseif node.operator == "<=" then
-            return left <= right
-        elseif node.operator == ">=" then
-            return left >= right
-        elseif node.operator == "and" then
-            return left and right
-        elseif node.operator == "or" then
-            return left or right
-        elseif node.operator == "&&" then
-            return left and right
-        elseif node.operator == "||" then
-            return left or right
-        elseif node.operator == "^" then
-            return bit32.bxor(left, right)
-        elseif node.operator == "&" then
-            return bit32.band(left, right)
-        elseif node.operator == "|" then
-            return bit32.bor(left, right)
-        elseif node.operator == "<<" then
-            return bit32.lshift(left, right)
-        elseif node.operator == ">>" then
-            return bit32.rshift(left, right)
-        else
+        return switch_case(node.operator, binary_expression_cases, function()
             Error:error("Unknown operator: " .. node.operator)
             error("Unknown operator: " .. node.operator)
-        end
-    elseif node.type == "IfStatement" then
+        end, left, right)
+    end,
+    ["IfStatement"] = function(self, node, variables, definedsymbols)
         local condition = self:evaluate(node.condition, variables, definedsymbols)
         if condition then
             self:evaluate(node.thenBlock, variables, definedsymbols)
         elseif node.elseBlock then
             self:evaluate(node.elseBlock, variables, definedsymbols)
         end
-        return nil
-    elseif node.type == "WhileStatement" then
+    end,
+    ["WhileStatement"] = function(self, node, variables, definedsymbols)
         local condition = self:evaluate(node.condition, variables, definedsymbols)
         while condition and not self.resulted do
             self:evaluate(node.codeBlock, variables, definedsymbols)
             condition = self:evaluate(node.condition, variables, definedsymbols)
         end
-        return nil
-    elseif node.type == "ForStatement" then
+    end,
+    ["ForStatement"] = function(self, node, variables, definedsymbols)
         self:evaluate(node.definition, variables, definedsymbols)
         local condition = self:evaluate(node.condition, variables, definedsymbols)
         while condition and not self.resulted do
@@ -175,8 +157,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             self:evaluate(node.codeBlock, variables, definedsymbols)
             self:evaluate(node.operation, variables, definedsymbols)
         end
-        return nil
-    elseif node.type == "ForEachStatement" then
+    end,
+    ["ForEachStatement"] = function(self, node, variables, definedsymbols)
         self:evaluate(node.key, variables, definedsymbols)
         self:evaluate(node.value, variables, definedsymbols)
         local source = self:evaluate(node.source, variables, definedsymbols)
@@ -186,8 +168,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             variables[node.value.name] = v
             self:evaluate(node.codeBlock, variables, definedsymbols)
         end
-        return nil
-    elseif node.type == "CodeBlock" then
+    end,
+    ["CodeBlock"] = function(self, node, variables, definedsymbols)
 	    local nself = Evaluator.new()
         nself.parent = self
         for _, block in node.code do
@@ -198,7 +180,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             self.result = nself.result
         end
         return nself:getResult()
-    elseif node.type == "AssignmentExpression" then
+    end,
+    ["AssignmentExpression"] = function(self, node, variables, definedsymbols)
         local value = self:evaluate(node.value, variables, definedsymbols)
         if node.target.type == "TableIndex" then
             local table = self:evaluate(node.target.base, variables, definedsymbols)
@@ -213,7 +196,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             error(`Invalid assignee ({node.target.type}) given to assignment`)
         end
         return value
-    elseif node.type == "VariableDefinition" then
+    end,
+    ["VariableDefinition"] = function(self, node, variables, definedsymbols)
         if self.constants[node.name] then
             Error:error(`A constant '{node.name}' is already declared before.`)
             error(`A constant '{node.name}' is already declared before.`)
@@ -223,7 +207,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         self.symbolExists[node.name] = true
         self.symbolType[node.name] = "var"
         return value
-    elseif node.type == "TempVariableDefinition" then
+    end,
+    ["TempVariableDefinition"] = function(self, node, variables, definedsymbols)
         if self.constants[node.name] then
             Error:error(`A constant '{node.name}' is already declared before.`)
             error(`A constant '{node.name}' is already declared before.`)
@@ -232,11 +217,12 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         variables[node.name] = value
         definedsymbols[node.name] = "tempvar"
         return value
-    elseif node.type == "ConstDeclaration" then
+    end,
+    ["ConstDeclaration"] = function(self, node, variables, definedsymbols)
         if self.constants[node.name] then
             Error:error(`Constant '{node.name}' is already declared.`)
             error(`Constant '{node.name}' is already declared.`)
-        elseif symbol_exists(node.variable) then
+        elseif self:doesSymbolExist(node.variable, definedsymbols) then
             Error:error(`A variable with name '{node.name}' is already defined.`)
             error(`A variable with name '{node.name}' is already defined.`)
         end
@@ -245,13 +231,14 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         self.constantsExists[node.name] = true
         self.symbolType[node.name] = "const"
         return value
-    elseif node.type == "FunctionDeclaration" then
+    end,
+    ["FunctionDeclaration"] = function(self, node, _variables, definedsymbols)
         local fn = {
             arguments = node.arguments,
             body = node.body,
             type = "fn",
         }
-        if symbol_exists(node.variable) then
+        if self:doesSymbolExist(node.variable, definedsymbols) then
             Error:error(`The symbol '{node.name}' is already declared before.`)
             error(`The symbol '{node.name}' is already declared before.`)
         end
@@ -259,7 +246,8 @@ function Evaluator:evaluate(node, variables, definedsymbols)
         self.symbolExists[node.name] = true
         self.symbolType[node.name] = "fn"
         return
-    elseif node.type == "FunctionCall" then
+    end,
+    ["FunctionCall"] = function(self, node, variables, definedsymbols)
         local fn = self:evaluate(node.base, variables, definedsymbols)
         if self.symbolType[node.base.value] ~= "fn" then
             Error:error("Can't call a non-function value.")
@@ -272,22 +260,36 @@ function Evaluator:evaluate(node, variables, definedsymbols)
             argexists[fn.arguments[i]] = true
         end
         return self:evaluate(fn.body, mix_tables(variables, argvars), mix_tables(definedsymbols, argexists))
-    elseif node.type == "Identifier" then
-        if not symbol_exists(node.value) then
+    end,
+    ["Identifier"] = function(self, node, variables, definedsymbols)
+        if not self:doesSymbolExist(node.value, definedsymbols) then
             Error:error(`Undefined identifier: '{node.value}'`)
             error(`Undefined identifier: '{node.value}'`)
         end
-        local value = get_variable(node.value)
+        local value = self:getValue(node.value, variables)
         return value
-    elseif node.type == "ReturnExpression" then
-	local value = self:evaluate(node.value, variables, definedsymbols)
-    self.resulted = true
-	self.result = value
-	return value
-    else
+    end,
+    ["ReturnExpression"] = function(self, node, variables, definedsymbols)
+        local value = self:evaluate(node.value, variables, definedsymbols)
+        self.resulted = true
+        self.result = value
+        return value
+    end,
+}
+
+function Evaluator:evaluate(node, variables, definedsymbols)
+    if self.resulted then return self.result end
+    variables = variables or {}
+    definedsymbols = definedsymbols or {}
+    if not node then
+        Error:error("Nil node given to evaluator")
+        error("Nil node given to evaluator")
+        return
+    end
+    return switch_case(node.type, node_type_cases, function()
         Error:error(`Unknown node type: {node.type}`)
         error(`Unknown node type: {node.type}`)
-    end
+    end, self, node, variables, definedsymbols)
 end
 
 function Evaluator:getResult()

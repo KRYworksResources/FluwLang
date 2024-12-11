@@ -492,7 +492,7 @@ function Parser:parseIdentifierExtensions(baseNode)
             currentNode = {
                 type = "TableIndex",
                 base = currentNode,
-                index = { type = "StringLiteral", value = key },
+                index = { type = "Literal", value = key },
             }
         elseif nextToken.type == "SYMBOL" and nextToken.value == "(" then
             self:advance() -- Consume '('
@@ -528,12 +528,9 @@ end
 -- Parse primary values (numbers, variables, parentheses)
 function Parser:parsePrimary()
     local token = self:currentToken()
-    if token.type == "NUMBER" then
+    if token.type == "NUMBER" or token.type == "STRING" then
         self:advance()
-        return { type = "NumberLiteral", value = token.value }
-    elseif token.type == "STRING" then
-        self:advance()
-        return { type = "StringLiteral", value = token.value }
+        return { type = "Literal", value = token.value }
     elseif token.type == "IDENTIFIER" then
         self:advance()
         local basenode = { type = "Identifier", value = token.value }
@@ -541,7 +538,7 @@ function Parser:parsePrimary()
     elseif token.type == "KEYWORD" then
         if token.value == "true" or token.value == "false" then
             self:advance()
-            return { type = "BooleanLiteral", value = token.value == "true" }
+            return { type = "Literal", value = token.value == "true" }
         elseif token.value == "null" then
             self:advance()
             return { type = "NullPointer" }
