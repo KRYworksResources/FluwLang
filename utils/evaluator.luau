@@ -308,7 +308,7 @@ function Evaluator:evaluate(node, symbols)
     end, self, node, symbols)
 end
 
-local function fluwFnToFunction(self, fn)
+function Evaluator:fluwFnToFunction(fn)
     return function(...)
         --TODO
     end
@@ -319,7 +319,7 @@ function Evaluator:getResult()
     if not result then return end
     if type(result) == "table" then
         if result.type == "fn" then
-            return fluwFnToFunction(self, result)
+            return self:fluwFnToFunction(result)
         else
             return result.value
         end

@@ -23,6 +23,10 @@ function FluwVM:pushToEnv(key:string, value:any)
     end
     self.Evaluator:declareSymbol(key, value, nil, "luanative", true, {})
 end
+function FluwVM:pullFromEnv(key:string)
+    local value = self.Evaluator:getSymbol(key, {})
+    return value.value
+end
 function FluwVM:getResult()
     return self.Evaluator:getResult()
 end
