@@ -8,7 +8,7 @@ function FluwVM:execute(input:string)
     local parser = Parser.new(tokens)
     local astree = {}
     while parser:currentToken().type ~= "EOF" do
-        local node = parser:parseExpression()
+        local node = parser:parseStatement()
         table.insert(astree, node)
     end
     for i=1, #astree do
@@ -18,7 +18,10 @@ function FluwVM:execute(input:string)
 end
 
 function FluwVM:pushToEnv(key:string, value:any)
-    
+    self.Evaluator:declareSymbol(key, value, nil, "luanative", true, {})
+end
+function FluwVM:getResult()
+    return self.Evaluator:getResult()
 end
 
 function FluwVM.new()
