@@ -8,15 +8,19 @@ local function mix_tables(t1, t2)
     end
     return base
 end
+local function handleError(message)
+    Error:error(message)
+    error(message)
+end
 
-function Evaluator:getValue(id:string, symbols)
+function Evaluator:getValue(id: string, symbols)
     symbols = symbols or {}
     local value = symbols[id] or self.symbolTable[id] or self.constants[id]
-    if not value and self.parent then
-        local prnt = self.parent
-        value = prnt:getValue(id)
+    if value then return value end
+    if self.parent then
+        return self.parent:getValue(id)
     end
-    return value
+    return nil
 end
 function Evaluator:doesSymbolExist(id:string, symbols)
     symbols = symbols or {}
@@ -31,8 +35,7 @@ function Evaluator:setVariable(id:string, value:any, symval, symdef)
     symval = symval or {}
     symdef = symdef or {}
     if self.constantsExists[id] then
-        Error:error("Constants can't be redeclared.")
-        error("Constants can't be redeclared.")
+        handleError("Constants can't be redeclared.")
     elseif not (self.symbolExists[id] or symdef[id]) then
         if self.parent then
             local prnt = self.parent
@@ -41,8 +44,7 @@ function Evaluator:setVariable(id:string, value:any, symval, symdef)
                 return
             end
         end
-        Error:error(`Variable '{id}' is undefined.`)
-        error(`Variable '{id}' is undefined.`)
+        handleError(`Variable '{id}' is undefined.`)
     end
     local target_write = if symdef[id] then symval else self.symbolTable
     target_write[id] = value
@@ -51,8 +53,7 @@ end
 
 local function switch_case(var, cases, default, ...)
     local f = cases[var] or default
-    if not f then return end
-    return f(...)
+    return f and f(...)
 end
 
 local binary_expression_cases = {
@@ -93,13 +94,13 @@ local node_type_cases = {
     end,
     ["UnaryExpression"] = function(self, node, variables, definedsymbols)
         local value = self:evaluate(node.value, variables, definedsymbols)
-        if node.operator == "-" then return -value
-        elseif node.operator == "not" then return not value
-        elseif node.operator == "~" then return bit32.bnot(value)
-        else
-            Error:error("Unknown unary operator: " .. node.operator)
-            error("Unknown unary operator: " .. node.operator)
+        local operator = node.operator
+        if operator == "-" then return -value
+        elseif operator == "not" then return not value
+        elseif operator == "~" then return bit32.bnot(value)
         end
+        handleError("Unknown unary operator: " .. node.operator)
+        return
     end,
     ["ArrayExpression"] = function(self, node, variables, definedsymbols)
         local array = {}
@@ -120,8 +121,7 @@ local node_type_cases = {
     ["TableIndex"] = function(self, node, variables, definedsymbols)
         local table = self:evaluate(node.base, variables, definedsymbols)
         if self.symbolType[node.value] == "fn" then
-            Error:error("Can't index a function value.")
-            error("Can't index a function value.")
+            handleError("Can't index a function value.")
         end
         local index = self:evaluate(node.index, variables, definedsymbols)
         return table[index]
@@ -130,8 +130,7 @@ local node_type_cases = {
         local left = self:evaluate(node.left, variables, definedsymbols)
         local right = self:evaluate(node.right, variables, definedsymbols)
         return switch_case(node.operator, binary_expression_cases, function()
-            Error:error("Unknown operator: " .. node.operator)
-            error("Unknown operator: " .. node.operator)
+            handleError("Unknown operator: " .. node.operator)
         end, left, right)
     end,
     ["IfStatement"] = function(self, node, variables, definedsymbols)
@@ -143,30 +142,38 @@ local node_type_cases = {
         end
     end,
     ["WhileStatement"] = function(self, node, variables, definedsymbols)
-        local condition = self:evaluate(node.condition, variables, definedsymbols)
+        local condnode = node.condition
+        local codeblock = node.codeBlock
+        local condition = self:evaluate(condnode, variables, definedsymbols)
         while condition and not self.resulted do
-            self:evaluate(node.codeBlock, variables, definedsymbols)
-            condition = self:evaluate(node.condition, variables, definedsymbols)
+            self:evaluate(codeblock, variables, definedsymbols)
+            condition = self:evaluate(condnode, variables, definedsymbols)
         end
     end,
     ["ForStatement"] = function(self, node, variables, definedsymbols)
         self:evaluate(node.definition, variables, definedsymbols)
-        local condition = self:evaluate(node.condition, variables, definedsymbols)
+        local condnode = node.condition
+        local opnode = node.operation
+        local codeblock = node.codeBlock
+        local condition = self:evaluate(condnode, variables, definedsymbols)
         while condition and not self.resulted do
-            condition = self:evaluate(node.condition, variables, definedsymbols)
-            self:evaluate(node.codeBlock, variables, definedsymbols)
-            self:evaluate(node.operation, variables, definedsymbols)
+            condition = self:evaluate(condnode, variables, definedsymbols)
+            self:evaluate(codeblock, variables, definedsymbols)
+            self:evaluate(opnode, variables, definedsymbols)
         end
     end,
     ["ForEachStatement"] = function(self, node, variables, definedsymbols)
-        self:evaluate(node.key, variables, definedsymbols)
-        self:evaluate(node.value, variables, definedsymbols)
+        local key, value = node.key, node.value
+        local kn, vn = key.name, value.name
+        local codeblock = node.codeBlock
+        self:evaluate(key, variables, definedsymbols)
+        self:evaluate(value, variables, definedsymbols)
         local source = self:evaluate(node.source, variables, definedsymbols)
         for k, v in source do
             if self.resulted then break end
-            variables[node.key.name] = k
-            variables[node.value.name] = v
-            self:evaluate(node.codeBlock, variables, definedsymbols)
+            variables[kn] = k
+            variables[vn] = v
+            self:evaluate(codeblock, variables, definedsymbols)
         end
     end,
     ["CodeBlock"] = function(self, node, variables, definedsymbols)
@@ -192,73 +199,69 @@ local node_type_cases = {
         elseif type(node.target) == "string" then
             self:setVariable(node.target, value, variables, definedsymbols)
         else
-            Error:error(`Invalid assignee ({node.target.type}) given to assignment`)
-            error(`Invalid assignee ({node.target.type}) given to assignment`)
+            handleError(`Invalid assignee ({node.target.type}) given to assignment`)
         end
         return value
     end,
     ["CompoundAssignmentExpression"] = function(self, node, variables, definedsymbols)
         local value = self:evaluate(node.value, variables, definedsymbols)
+        local target = node.target
+        local operator = node.operator
         if node.target.type == "TableIndex" then
-            local table = self:evaluate(node.target.base, variables, definedsymbols)
-            local index = self:evaluate(node.target.index, variables, definedsymbols)
-            table[index] = switch_case(node.operator, binary_expression_cases, function()
-                Error:error("Unsupported operator in compound assignment: " .. node.operator)
-                error("Unsupported operator in compound assignment: " .. node.operator)
+            local table = self:evaluate(target.base, variables, definedsymbols)
+            local index = self:evaluate(target.index, variables, definedsymbols)
+            table[index] = switch_case(operator, binary_expression_cases, function()
+                handleError("Unsupported operator in compound assignment: " .. operator)
             end, table[index], value)
         elseif node.target.type == "Identifier" then
-            local current = self:getValue(node.target.value, variables)
-            local target_value = switch_case(node.operator, binary_expression_cases, function()
-                Error:error("Unsupported operator in compound assignment: " .. node.operator)
-                error("Unsupported operator in compound assignment: " .. node.operator)
+            local current = self:getValue(target.value, variables)
+            local target_value = switch_case(operator, binary_expression_cases, function()
+                handleError("Unsupported operator in compound assignment: " .. operator)
             end, current, value)
-            self:setVariable(node.target.value, target_value, variables, definedsymbols)
+            self:setVariable(target.value, target_value, variables, definedsymbols)
         elseif type(node.target) == "string" then
-            local current = self:getValue(node.target, variables)
-            local target_value = switch_case(node.operator, binary_expression_cases, function()
-                Error:error("Unsupported operator in compound assignment: " .. node.operator)
-                error("Unsupported operator in compound assignment: " .. node.operator)
+            local current = self:getValue(target, variables)
+            local target_value = switch_case(operator, binary_expression_cases, function()
+                handleError("Unsupported operator in compound assignment: " .. operator)
             end, current, value)
-            self:setVariable(node.target, target_value, variables, definedsymbols)
+            self:setVariable(target, target_value, variables, definedsymbols)
         else
-            Error:error(`Invalid assignee ({node.target.type}) given to assignment`)
-            error(`Invalid assignee ({node.target.type}) given to assignment`)
+            handleError(`Invalid assignee ({target.type}) given to assignment`)
         end
         return value
     end,
     ["VariableDefinition"] = function(self, node, variables, definedsymbols)
-        if self.constants[node.name] then
-            Error:error(`A constant '{node.name}' is already declared before.`)
-            error(`A constant '{node.name}' is already declared before.`)
+        local name = node.name
+        if self.constants[name] then
+            handleError(`A constant '{name}' is already declared before.`)
         end
         local value = self:evaluate(node.value, variables, definedsymbols)
-        self.symbolTable[node.name] = value
-        self.symbolExists[node.name] = true
-        self.symbolType[node.name] = "var"
+        self.symbolTable[name] = value
+        self.symbolExists[name] = true
+        self.symbolType[name] = "var"
         return value
     end,
     ["TempVariableDefinition"] = function(self, node, variables, definedsymbols)
-        if self.constants[node.name] then
-            Error:error(`A constant '{node.name}' is already declared before.`)
-            error(`A constant '{node.name}' is already declared before.`)
+        local name = node.name
+        if self.constants[name] then
+            handleError(`A constant '{name}' is already declared before.`)
         end
         local value = self:evaluate(node.value, variables, definedsymbols)
-        variables[node.name] = value
-        definedsymbols[node.name] = "tempvar"
+        variables[name] = value
+        definedsymbols[name] = "tempvar"
         return value
     end,
     ["ConstDeclaration"] = function(self, node, variables, definedsymbols)
-        if self.constants[node.name] then
-            Error:error(`Constant '{node.name}' is already declared.`)
-            error(`Constant '{node.name}' is already declared.`)
-        elseif self:doesSymbolExist(node.variable, definedsymbols) then
-            Error:error(`A variable with name '{node.name}' is already defined.`)
-            error(`A variable with name '{node.name}' is already defined.`)
+        local name = node.name
+        if self.constants[name] then
+            handleError(`Constant '{name}' is already declared.`)
+        elseif self:doesSymbolExist(node.name, definedsymbols) then
+            handleError(`A variable with name '{name}' is already defined.`)
         end
         local value = self:evaluate(node.value, variables, definedsymbols)
-        self.constants[node.name] = value
-        self.constantsExists[node.name] = true
-        self.symbolType[node.name] = "const"
+        self.constants[name] = value
+        self.constantsExists[name] = true
+        self.symbolType[name] = "const"
         return value
     end,
     ["FunctionDeclaration"] = function(self, node, _variables, definedsymbols)
@@ -267,9 +270,8 @@ local node_type_cases = {
             body = node.body,
             type = "fn",
         }
-        if self:doesSymbolExist(node.variable, definedsymbols) then
-            Error:error(`The symbol '{node.name}' is already declared before.`)
-            error(`The symbol '{node.name}' is already declared before.`)
+        if self:doesSymbolExist(node.name, definedsymbols) then
+            handleError(`The symbol '{node.name}' is already declared before.`)
         end
         self.symbolTable[node.name] = fn
         self.symbolExists[node.name] = true
@@ -279,8 +281,7 @@ local node_type_cases = {
     ["FunctionCall"] = function(self, node, variables, definedsymbols)
         local fn = self:evaluate(node.base, variables, definedsymbols)
         if self.symbolType[node.base.value] ~= "fn" then
-            Error:error("Can't call a non-function value.")
-            error("Can't call a non-function value.")
+            handleError("Can't call a non-function value.")
         end
         local argvars = {}
         local argexists = {}
@@ -291,11 +292,11 @@ local node_type_cases = {
         return self:evaluate(fn.body, mix_tables(variables, argvars), mix_tables(definedsymbols, argexists))
     end,
     ["Identifier"] = function(self, node, variables, definedsymbols)
-        if not self:doesSymbolExist(node.value, definedsymbols) then
-            Error:error(`Undefined identifier: '{node.value}'`)
-            error(`Undefined identifier: '{node.value}'`)
+        local name = node.value
+        if not self:doesSymbolExist(name, definedsymbols) then
+            handleError(`Undefined identifier: '{name}'`)
         end
-        local value = self:getValue(node.value, variables)
+        local value = self:getValue(name, variables)
         return value
     end,
     ["ReturnExpression"] = function(self, node, variables, definedsymbols)
@@ -311,13 +312,11 @@ function Evaluator:evaluate(node, variables, definedsymbols)
     variables = variables or {}
     definedsymbols = definedsymbols or {}
     if not node then
-        Error:error("Nil node given to evaluator")
-        error("Nil node given to evaluator")
+        handleError("Nil node given to evaluator")
         return
     end
     return switch_case(node.type, node_type_cases, function()
-        Error:error(`Unknown node type: {node.type}`)
-        error(`Unknown node type: {node.type}`)
+        handleError(`Unknown node type: {node.type}`)
     end, self, node, variables, definedsymbols)
 end
 
