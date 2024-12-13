@@ -18,6 +18,9 @@ function FluwVM:execute(input:string)
 end
 
 function FluwVM:pushToEnv(key:string, value:any)
+    if type(value) == "table" then
+        value = { type = "dict", value = value }
+    end
     self.Evaluator:declareSymbol(key, value, nil, "luanative", true, {})
 end
 function FluwVM:getResult()
