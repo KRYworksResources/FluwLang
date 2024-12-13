@@ -4,14 +4,10 @@ local input = [[
         "value"
     ];
     var b = a[1];
+    return b;
 ]]
-local targetresults = {
-    {
-        "value"
-    },
-    "value"
-}
+local targetresult = "value"
 return function()
-    local results = executor.exec(input)
-    assert(executor.compare_tables(results, targetresults))
+    local result = executor.run(input)
+    assert(result == targetresult, "Assertion failed!")
 end

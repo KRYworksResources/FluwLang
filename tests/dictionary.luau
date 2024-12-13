@@ -9,19 +9,12 @@ local input = [[
             "recursive": true,
         }
     };
+    return a[key];
 ]]
-local targetresults = {
-    "meow", -- the string we define lol
-    {
-        key = "value",
-        [5] = true,
-        [4] = 3,
-        meow = {
-            recursive = true
-        }
-    }
+local targetresult = {
+    recursive = true
 }
 return function()
-    local results = executor.exec(input)
-    assert(executor.compare_tables(results, targetresults))
+    local result = executor.run(input)
+    assert(executor.compare_tables(result, targetresult), "Assertion failed!")
 end

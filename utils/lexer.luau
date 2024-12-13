@@ -207,7 +207,7 @@ function Lexer:nextToken()
     self:skipComment()
     local char = self:currentChar()
     if not char or char == "" then
-        return { type = Lexer.TokenType.EOF }
+        return { type = Lexer.TokenType.EOF, line = self.position }
     elseif isDigit(char) then
         return self:readNumber()
     elseif isSymbol(char) then

@@ -513,7 +513,7 @@ function Parser:parseIdentifierExtensions(baseNode)
                 while true do
                     local paramToken = self:currentToken()
                     self:advance()
-                    table.insert(args, paramToken.value)
+                    table.insert(args, paramToken)
                     if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
                         self:advance()
                     else

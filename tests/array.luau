@@ -6,16 +6,10 @@ local input = [[
             "ooOOrecursiveOOoo"
         ]
     ];
+    return a[2][1];
 ]]
-local targetresults = {
-    {
-        "value",
-        {
-            "ooOOrecursiveOOoo"
-        }
-    }
-}
+local targetresult = "ooOOrecursiveOOoo"
 return function()
-    local results = executor.exec(input)
-    assert(executor.compare_tables(results, targetresults))
+    local result = executor.run(input)
+    assert(result == targetresult, "Assertion failed!")
 end

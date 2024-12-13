@@ -13,42 +13,39 @@ local function handleError(message)
     error(message)
 end
 
-function Evaluator:getValue(id: string, symbols)
-    symbols = symbols or {}
-    local value = symbols[id] or self.symbolTable[id] or self.constants[id]
-    if value then return value end
-    if self.parent then
-        return self.parent:getValue(id)
-    end
+function Evaluator:getSymbol(id, symbols)
+    local entry = (symbols or {})[id] or self.symbolTable[id]
+    if entry then return entry end
+    if self.parent then return self.parent:getSymbol(id) end
     return nil
 end
-function Evaluator:doesSymbolExist(id:string, symbols)
-    symbols = symbols or {}
-    local value = symbols[id] or self.symbolExists[id] or self.constantsExists[id]
-    if not value and self.parent then
-        local prnt = self.parent
-        value = prnt:doesSymbolExist(id)
-    end
-    return value
-end
-function Evaluator:setVariable(id:string, value:any, symval, symdef)
-    symval = symval or {}
-    symdef = symdef or {}
-    if self.constantsExists[id] then
-        handleError("Constants can't be redeclared.")
-    elseif not (self.symbolExists[id] or symdef[id]) then
+function Evaluator:setVariable(id, value, symbols)
+    local entry = (symbols or {})[id] or self.symbolTable[id]
+    if not entry then
         if self.parent then
-            local prnt = self.parent
-            if prnt:doesSymbolExist(id) then
-                prnt:setVariable(id, value)
-                return
-            end
+            return self.parent:setVariable(id, value)
         end
         handleError(`Variable '{id}' is undefined.`)
     end
-    local target_write = if symdef[id] then symval else self.symbolTable
-    target_write[id] = value
+    if not entry.mutable then
+        handleError(`Cannot modify constant '{id}'.`)
+    end
+    entry.value = value
     return value
+end
+local function createVariable(value, type, symbolType, mutable)
+    return {
+        type = type,
+        vartype = symbolType,
+        value = value,
+        mutable = mutable
+    }
+end
+function Evaluator:declareSymbol(id, value, type, symbolType, mutable, symbols)
+    if self:getSymbol(id, symbols) then
+        handleError(`Symbol '{id}' is already declared.`)
+    end
+    self.symbolTable[id] = createVariable(value, type, symbolType, mutable)
 end
 
 local function switch_case(var, cases, default, ...)
@@ -86,14 +83,14 @@ local binary_expression_cases = {
 }
 
 local node_type_cases = {
-    ["NullPointer"] = function(_self, _node, _variables, _definedsymbols)
+    ["NullPointer"] = function(_self, _node, _variables)
         return nil
     end,
-    ["Literal"] = function(_self, _node, _variables, _definedsymbols)
-        return _node.value
+    ["Literal"] = function(_self, node, _variables)
+        return node.value
     end,
-    ["UnaryExpression"] = function(self, node, variables, definedsymbols)
-        local value = self:evaluate(node.value, variables, definedsymbols)
+    ["UnaryExpression"] = function(self, node, variables)
+        local value = self:evaluate(node.value, variables)
         local operator = node.operator
         if operator == "-" then return -value
         elseif operator == "not" then return not value
@@ -102,235 +99,232 @@ local node_type_cases = {
         handleError("Unknown unary operator: " .. node.operator)
         return
     end,
-    ["ArrayExpression"] = function(self, node, variables, definedsymbols)
+    ["ArrayExpression"] = function(self, node, variables)
         local array = {}
         for _, elementNode in ipairs(node.elements) do
-            table.insert(array, self:evaluate(elementNode, variables, definedsymbols))
+            table.insert(array, self:evaluate(elementNode, variables))
         end
-        return array
+        return { type = "array", value = array }
     end,
-    ["DictExpression"] = function(self, node, variables, definedsymbols)
+    ["DictExpression"] = function(self, node, variables)
         local dict = {}
         for k, v in node.pairs do
-            local key = self:evaluate(k, variables, definedsymbols)
-            local value = self:evaluate(v, variables, definedsymbols)
+            local key = self:evaluate(k, variables)
+            local value = self:evaluate(v, variables)
             dict[key] = value
         end
-        return dict
+        return { type = "dict", value = dict }
     end,
-    ["TableIndex"] = function(self, node, variables, definedsymbols)
-        local table = self:evaluate(node.base, variables, definedsymbols)
-        if self.symbolType[node.value] == "fn" then
-            handleError("Can't index a function value.")
+    ["TableIndex"] = function(self, node, variables)
+        local table = self:evaluate(node.base, variables)
+        local index = self:evaluate(node.index, variables)
+        if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
+            handleError(`Attempted to index array with non-integer value: {index}`)
+        elseif table.type == "fn" then
+            handleError(`Attempted to index a function value`)
         end
-        local index = self:evaluate(node.index, variables, definedsymbols)
-        return table[index]
+        return table.value[index]
     end,
-    ["BinaryExpression"] = function(self, node, variables, definedsymbols)
-        local left = self:evaluate(node.left, variables, definedsymbols)
-        local right = self:evaluate(node.right, variables, definedsymbols)
+    ["BinaryExpression"] = function(self, node, variables)
+        local left = self:evaluate(node.left, variables)
+        local right = self:evaluate(node.right, variables)
         return switch_case(node.operator, binary_expression_cases, function()
             handleError("Unknown operator: " .. node.operator)
         end, left, right)
     end,
-    ["IfStatement"] = function(self, node, variables, definedsymbols)
-        local condition = self:evaluate(node.condition, variables, definedsymbols)
+    ["IfStatement"] = function(self, node, variables)
+        local condition = self:evaluate(node.condition, variables)
         if condition then
-            self:evaluate(node.thenBlock, variables, definedsymbols)
+            self:evaluate(node.thenBlock, variables)
         elseif node.elseBlock then
-            self:evaluate(node.elseBlock, variables, definedsymbols)
+            self:evaluate(node.elseBlock, variables)
         end
     end,
-    ["WhileStatement"] = function(self, node, variables, definedsymbols)
+    ["WhileStatement"] = function(self, node, variables)
         local condnode = node.condition
         local codeblock = node.codeBlock
-        local condition = self:evaluate(condnode, variables, definedsymbols)
+        local condition = self:evaluate(condnode, variables)
         while condition and not self.resulted do
-            self:evaluate(codeblock, variables, definedsymbols)
-            condition = self:evaluate(condnode, variables, definedsymbols)
+            self:evaluate(codeblock, variables)
+            condition = self:evaluate(condnode, variables)
         end
     end,
-    ["ForStatement"] = function(self, node, variables, definedsymbols)
-        self:evaluate(node.definition, variables, definedsymbols)
+    ["ForStatement"] = function(self, node, variables)
+        self:evaluate(node.definition, variables)
         local condnode = node.condition
         local opnode = node.operation
         local codeblock = node.codeBlock
-        local condition = self:evaluate(condnode, variables, definedsymbols)
+        local condition = self:evaluate(condnode, variables)
         while condition and not self.resulted do
-            condition = self:evaluate(condnode, variables, definedsymbols)
-            self:evaluate(codeblock, variables, definedsymbols)
-            self:evaluate(opnode, variables, definedsymbols)
+            condition = self:evaluate(condnode, variables)
+            self:evaluate(codeblock, variables)
+            self:evaluate(opnode, variables)
         end
     end,
-    ["ForEachStatement"] = function(self, node, variables, definedsymbols)
+    ["ForEachStatement"] = function(self, node, variables)
         local key, value = node.key, node.value
         local kn, vn = key.name, value.name
         local codeblock = node.codeBlock
-        self:evaluate(key, variables, definedsymbols)
-        self:evaluate(value, variables, definedsymbols)
-        local source = self:evaluate(node.source, variables, definedsymbols)
-        for k, v in source do
+        self:evaluate(key, variables)
+        self:evaluate(value, variables)
+        local source = self:evaluate(node.source, variables)
+        for k, v in source.value do
             if self.resulted then break end
-            variables[kn] = k
-            variables[vn] = v
-            self:evaluate(codeblock, variables, definedsymbols)
+            variables[kn] = createVariable(k, nil, "loop", true)
+            variables[vn] = createVariable(v, nil, "loop", true)
+            self:evaluate(codeblock, variables)
         end
     end,
-    ["CodeBlock"] = function(self, node, variables, definedsymbols)
+    ["CodeBlock"] = function(self, node, variables)
 	    local nself = Evaluator.new()
         nself.parent = self
         for _, block in node.code do
-            nself:evaluate(block, variables, definedsymbols)
+            nself:evaluate(block, variables)
         end
         if node.blocktype == "block" and nself.resulted then
             self.resulted = true
             self.result = nself.result
         end
-        return nself:getResult()
+        return nself.result
     end,
-    ["AssignmentExpression"] = function(self, node, variables, definedsymbols)
-        local value = self:evaluate(node.value, variables, definedsymbols)
-        if node.target.type == "TableIndex" then
-            local table = self:evaluate(node.target.base, variables, definedsymbols)
-            local index = self:evaluate(node.target.index, variables, definedsymbols)
-            table[index] = value
-        elseif node.target.type == "Identifier" then
-            self:setVariable(node.target.value, value, variables, definedsymbols)
-        elseif type(node.target) == "string" then
-            self:setVariable(node.target, value, variables, definedsymbols)
-        else
-            handleError(`Invalid assignee ({node.target.type}) given to assignment`)
-        end
-        return value
-    end,
-    ["CompoundAssignmentExpression"] = function(self, node, variables, definedsymbols)
-        local value = self:evaluate(node.value, variables, definedsymbols)
+    ["AssignmentExpression"] = function(self, node, variables)
+        local value = self:evaluate(node.value, variables)
         local target = node.target
-        local operator = node.operator
-        if node.target.type == "TableIndex" then
-            local table = self:evaluate(target.base, variables, definedsymbols)
-            local index = self:evaluate(target.index, variables, definedsymbols)
-            table[index] = switch_case(operator, binary_expression_cases, function()
-                handleError("Unsupported operator in compound assignment: " .. operator)
-            end, table[index], value)
+        if target.type == "TableIndex" then
+            local table = self:evaluate(target.base, variables)
+            local index = self:evaluate(target.index, variables)
+            if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
+                handleError(`Attempted to index array with non-integer value: {index}`)
+            elseif table.type == "fn" then
+                handleError(`Attempted to index a function value`)
+            end
+            table.value[index] = value
         elseif node.target.type == "Identifier" then
-            local current = self:getValue(target.value, variables)
-            local target_value = switch_case(operator, binary_expression_cases, function()
-                handleError("Unsupported operator in compound assignment: " .. operator)
-            end, current, value)
-            self:setVariable(target.value, target_value, variables, definedsymbols)
-        elseif type(node.target) == "string" then
-            local current = self:getValue(target, variables)
-            local target_value = switch_case(operator, binary_expression_cases, function()
-                handleError("Unsupported operator in compound assignment: " .. operator)
-            end, current, value)
-            self:setVariable(target, target_value, variables, definedsymbols)
+            self:setVariable(target.value, value, variables)
         else
             handleError(`Invalid assignee ({target.type}) given to assignment`)
         end
         return value
     end,
-    ["VariableDefinition"] = function(self, node, variables, definedsymbols)
-        local name = node.name
-        if self.constants[name] then
-            handleError(`A constant '{name}' is already declared before.`)
+    ["CompoundAssignmentExpression"] = function(self, node, variables)
+        local value = self:evaluate(node.value, variables)
+        local target = node.target
+        local operator = node.operator
+        if target.type == "TableIndex" then
+            local table = self:evaluate(target.base, variables)
+            local index = self:evaluate(target.index, variables)
+            if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
+                handleError(`Attempted to index array with non-integer value: {index}`)
+            elseif table.type == "fn" then
+                handleError(`Attempted to index a function value`)
+            end
+            table.value[index] = switch_case(operator, binary_expression_cases, function()
+                handleError("Unsupported operator in compound assignment: " .. operator)
+            end, table.value[index], value)
+        elseif target.type == "Identifier" then
+            local current = self:evaluate(target, variables)
+            local target_value = switch_case(operator, binary_expression_cases, function()
+                handleError("Unsupported operator in compound assignment: " .. operator)
+            end, current, value)
+            self:setVariable(target.value, target_value, variables)
+        else
+            handleError(`Invalid assignee ({target.type}) given to assignment`)
         end
-        local value = self:evaluate(node.value, variables, definedsymbols)
-        self.symbolTable[name] = value
-        self.symbolExists[name] = true
-        self.symbolType[name] = "var"
         return value
     end,
-    ["TempVariableDefinition"] = function(self, node, variables, definedsymbols)
-        local name = node.name
-        if self.constants[name] then
-            handleError(`A constant '{name}' is already declared before.`)
-        end
-        local value = self:evaluate(node.value, variables, definedsymbols)
-        variables[name] = value
-        definedsymbols[name] = "tempvar"
+    ["VariableDefinition"] = function(self, node, variables)
+        local value = self:evaluate(node.value, variables)
+        self:declareSymbol(node.name, value, nil, "any", true, variables)
         return value
     end,
-    ["ConstDeclaration"] = function(self, node, variables, definedsymbols)
+    ["TempVariableDefinition"] = function(self, node, variables)
         local name = node.name
-        if self.constants[name] then
-            handleError(`Constant '{name}' is already declared.`)
-        elseif self:doesSymbolExist(node.name, definedsymbols) then
-            handleError(`A variable with name '{name}' is already defined.`)
+        if self:getSymbol(name, variables) then
+            handleError(`Symbol '{name}' is already declared.`)
         end
-        local value = self:evaluate(node.value, variables, definedsymbols)
-        self.constants[name] = value
-        self.constantsExists[name] = true
-        self.symbolType[name] = "const"
+        local value = self:evaluate(node.value, variables)
+        variables[name] = createVariable(value, nil, "any", true)
         return value
     end,
-    ["FunctionDeclaration"] = function(self, node, _variables, definedsymbols)
+    ["ConstDeclaration"] = function(self, node, variables)
+        local value = self:evaluate(node.value, variables)
+        self:declareSymbol(node.name, value, nil, "any", false, variables)
+        return value
+    end,
+    ["FunctionDeclaration"] = function(self, node, variables)
         local fn = {
             arguments = node.arguments,
             body = node.body,
             type = "fn",
         }
-        if self:doesSymbolExist(node.name, definedsymbols) then
-            handleError(`The symbol '{node.name}' is already declared before.`)
-        end
-        self.symbolTable[node.name] = fn
-        self.symbolExists[node.name] = true
-        self.symbolType[node.name] = "fn"
-        return
+        self:declareSymbol(node.name, fn, nil, "fn", true, variables)
     end,
-    ["FunctionCall"] = function(self, node, variables, definedsymbols)
-        local fn = self:evaluate(node.base, variables, definedsymbols)
-        if self.symbolType[node.base.value] ~= "fn" then
-            handleError("Can't call a non-function value.")
+    ["FunctionCall"] = function(self, node, variables)
+        local base = node.base
+        local fnEntry = self:getSymbol(base.value, variables)
+        local fnValue = fnEntry.value
+        if not fnEntry or fnEntry.vartype ~= "fn" then
+            handleError(`'{base.value}' is not a function.`)
         end
-        local argvars = {}
-        local argexists = {}
-        for i, v in node.args do
-            argvars[fn.arguments[i]] = v
-            argexists[fn.arguments[i]] = true
+        if #node.args ~= #fnEntry.value.arguments then
+            handleError(`Function '{base.value}' expects {#fnValue.arguments} arguments, got {#node.args}.`)
         end
-        return self:evaluate(fn.body, mix_tables(variables, argvars), mix_tables(definedsymbols, argexists))
+        local localVars = {}
+        for i, argName in fnValue.arguments do
+            localVars[argName] = node.args[i]
+        end
+        return self:evaluate(fnEntry.value.body, mix_tables(variables, localVars))
     end,
-    ["Identifier"] = function(self, node, variables, definedsymbols)
+    ["Identifier"] = function(self, node, variables)
         local name = node.value
-        if not self:doesSymbolExist(name, definedsymbols) then
+        local symbol = self:getSymbol(name, variables)
+        if not symbol then
             handleError(`Undefined identifier: '{name}'`)
         end
-        local value = self:getValue(name, variables)
-        return value
+        return symbol.value
     end,
-    ["ReturnExpression"] = function(self, node, variables, definedsymbols)
-        local value = self:evaluate(node.value, variables, definedsymbols)
+    ["ReturnExpression"] = function(self, node, variables)
+        local value = self:evaluate(node.value, variables)
         self.resulted = true
         self.result = value
         return value
     end,
 }
 
-function Evaluator:evaluate(node, variables, definedsymbols)
+function Evaluator:evaluate(node, symbols)
     if self.resulted then return self.result end
-    variables = variables or {}
-    definedsymbols = definedsymbols or {}
+    symbols = symbols or {}
     if not node then
         handleError("Nil node given to evaluator")
         return
     end
     return switch_case(node.type, node_type_cases, function()
         handleError(`Unknown node type: {node.type}`)
-    end, self, node, variables, definedsymbols)
+    end, self, node, symbols)
+end
+
+local function fluwFnToFunction(self, fn)
+    return function(...)
+        --TODO
+    end
 end
 
 function Evaluator:getResult()
-    return self.result
+    local result = self.result
+    if not result then return end
+    if type(result) == "table" then
+        if result.type == "fn" then
+            return fluwFnToFunction(self, result)
+        else
+            return result.value
+        end
+    end
+    return result 
 end
 
 function Evaluator.new()
     local self = setmetatable({}, { __index = Evaluator })
-    self.symbolExists = {} -- Stores if a variable exists
-    self.symbolTable = {} -- Stores variable names and values
-    self.constants = {} -- Stores constant names and values
-    self.constantsExists = {} -- Stores if a constant exists
-    self.symbolType = {} -- Stores the base type of symbols
+    self.symbolTable = {} -- Centralized symbol storage
     self.result = nil -- Stores result given by a return statement
     self.resulted = false -- Is this evaluator finished?
     self.parent = nil -- Parent scope evaluator

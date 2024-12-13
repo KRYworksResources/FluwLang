@@ -5,15 +5,10 @@ local input = [[
     };
     var b = a["key"];
     var c = a.key;
+    return b == c;
 ]]
-local targetresults = {
-    {
-        key = "value"
-    },
-    "value",
-    "value",
-}
+local targetresult = true
 return function()
-    local results = executor.exec(input)
-    assert(executor.compare_tables(results, targetresults))
+    local result = executor.run(input)
+    assert(result == targetresult, "Assertion failed!")
 end
