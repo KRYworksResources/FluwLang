@@ -295,7 +295,11 @@ local node_type_cases = {
             end
             return self:evaluate(fnEntry.body, mix_tables(variables, localVars))
         elseif type(fnEntry) == "function" then
-            return fnEntry(table.unpack(node.args))
+            local localVars = {}
+            for i = 1, #node.args do
+                localVars[i] = self:evaluate(node.args[i], variables)
+            end
+            return fnEntry(table.unpack(localVars))
         end
         return
     end,

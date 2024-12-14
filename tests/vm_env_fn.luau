@@ -1,12 +1,12 @@
 local fvm = require("../utils/fvm")
 local input = [[
-    return _ENV();
+    return _ENV("hi");
 ]]
 local targetresult = "hi"
 return function()
     local vm = fvm.new()
-    vm:pushToEnv("_ENV", function()
-        return "hi"
+    vm:pushToEnv("_ENV", function(str)
+        return str
     end)
     vm:execute(input)
     local result = vm:getResult()
