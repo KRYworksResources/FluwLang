@@ -102,6 +102,13 @@ local node_type_cases = {
     ["Literal"] = function(_self, node, _variables)
         return node.value
     end,
+    ["LambdaLiteral"] = function(_self, node, _variables)
+        return {
+            arguments = node.arguments,
+            body = node.body,
+            type = "fn",
+        }
+    end,
     ["UnaryExpression"] = function(self, node, variables)
         local value = self:evaluate(node.value, variables)
         local operator = node.operator
@@ -277,7 +284,7 @@ local node_type_cases = {
         local fnEntry = self:getSymbol(base.value, variables)
         local fnValue = fnEntry.value
         if type(fnValue) == "table" then
-            if not fnEntry or fnEntry.vartype ~= "fn" then
+            if not fnValue.type or fnValue.type ~= "fn" then
                 handleError(`'{base.value}' is not a function.`)
             end
             if #node.args ~= #fnEntry.value.arguments then

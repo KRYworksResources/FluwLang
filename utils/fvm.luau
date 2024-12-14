@@ -1,6 +1,7 @@
 local FluwVM = {}
 local LexerUtils = require("lexer_utils")
 local Parser = require("parser")
+local Types = require("types")
 local Evaluator = require("evaluator")
 
 function FluwVM:execute(input:string)
@@ -17,11 +18,15 @@ function FluwVM:execute(input:string)
     end
 end
 
-function FluwVM:pushToEnv(key:string, value:any)
+function FluwVM:pushToEnv(key:string, value:any, typecheck:boolean?)
     if type(value) == "table" then
         value = { type = "dict", value = value }
     end
-    self.Evaluator:declareSymbol(key, value, nil, "luanative", true, {})
+    local datatype
+    if typecheck then
+        datatype = Types.getDataTypeNameById(Types.luaGetValueType(value))
+    end
+    self.Evaluator:declareSymbol(key, value, datatype, "luanative", true, {})
 end
 function FluwVM:pullFromEnv(key:string)
     local value = self.Evaluator:getSymbol(key, {})

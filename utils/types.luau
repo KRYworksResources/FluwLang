@@ -65,7 +65,7 @@ function Types.isValueType(datatype, entry, value)
         if type(value) == "function" then return true end
         local valid = type(value) == "table"
         if not valid then return false end
-        return valid.type == "fn"
+        return value.type == "fn"
     elseif datatype == Types.DataTypes.float then return type(value) == "number"
     elseif datatype == Types.DataTypes.bool then return type(value) == "boolean"
     elseif datatype == Types.DataTypes.dictionary then return type(value) == "table"

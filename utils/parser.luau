@@ -122,15 +122,8 @@ function Parser:parseConstDeclaration()
     local value = self:parseExpression()
     return { type = "ConstDeclaration", name = constName, value = value, vartype = type }
 end
-function Parser:parseFunctionDeclaration()
-    self:advance()
-    -- Parse the function name
-    local nameToken = self:currentToken()
-    if nameToken.type ~= "IDENTIFIER" then
-        self:error("Expected function name after 'fn'")
-    end
-    self:advance()
-    local functionName = nameToken.value
+
+function Parser:parseParameterList()
     -- Parse the parameter list
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "(" then
         error("Expected '(' after function name")
@@ -156,6 +149,19 @@ function Parser:parseFunctionDeclaration()
         error("Expected ')' after parameters")
     end
     self:advance() -- Consume ')'
+    return parameters
+end
+
+function Parser:parseFunctionDeclaration()
+    self:advance()
+    -- Parse the function name
+    local nameToken = self:currentToken()
+    if nameToken.type ~= "IDENTIFIER" then
+        self:error("Expected function name after 'fn'")
+    end
+    self:advance()
+    local functionName = nameToken.value
+    local parameters = self:parseParameterList()
     -- Parse the function body
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
         error("Expected '{' to start function body")
@@ -177,6 +183,33 @@ function Parser:parseFunctionDeclaration()
     return {
         type = "FunctionDeclaration",
         name = functionName,
+        arguments = parameters,
+        body = body,
+    }
+end
+function Parser:parseLambdaExpression()
+    self:advance() -- Consume 'fn'
+    local parameters = self:parseParameterList()
+    -- Parse the function body
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
+        error("Expected '{' to start function body")
+    end
+    self:advance() -- Consume '{'
+    local body = {
+        type = "CodeBlock",
+        blocktype = "contained",
+        code = {}
+    } -- Parse statements inside the function body
+    while self:currentToken().value ~= "}" do
+        table.insert(body.code, self:parseStatement())
+    end
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
+        error("Expected '}' to end function body")
+    end
+    self:advance() -- Consume '}'
+    -- Return the function declaration AST node
+    return {
+        type = "LambdaLiteral",
         arguments = parameters,
         body = body,
     }
@@ -568,6 +601,8 @@ function Parser:parsePrimary()
         elseif token.value == "null" then
             self:advance()
             return { type = "NullPointer" }
+        elseif token.value == "fn" then
+            return self:parseLambdaExpression()
         end
     elseif token.type == "SYMBOL" then
         self:advance()
