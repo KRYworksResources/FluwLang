@@ -71,6 +71,8 @@ function Parser:parseStatement()
             node = self:parseForStatement()
         elseif self:currentToken().value == "foreach" then
             node = self:parseForEachStatement()
+        elseif self:currentToken().value == "do" then
+            node = self:parseCodeblockStatement()
         else
             error("Unknown keyword: " .. self:currentToken().value)
         end
@@ -213,6 +215,26 @@ function Parser:parseLambdaExpression()
         arguments = parameters,
         body = body,
     }
+end
+function Parser:parseCodeblockStatement()
+    self:advance() -- Consume 'do'
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
+        error("Expected '{' to start block body")
+    end
+    self:advance() -- Consume '{'
+    local node = {
+        type = "CodeBlock",
+        blocktype = "block",
+        code = {}
+    } -- Parse statements inside the block body
+    while self:currentToken().value ~= "}" do
+        table.insert(node.code, self:parseStatement())
+    end
+    if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
+        error("Expected '}' to end block body")
+    end
+    self:advance() -- Consume '}'
+    return node
 end
 
 function Parser:parseReturnStatement()
