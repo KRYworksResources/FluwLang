@@ -80,6 +80,18 @@ function Parser:parseStatement()
     self:expectSemicolon()
     return node
 end
+function Parser:parseType()
+    local type = nil
+    if self:currentToken().type == "SYMBOL" and self:currentToken().value == ":" then
+        self:advance() -- Consume ':'
+        type = "auto"
+        if self:currentToken().type == "IDENTIFIER" then
+            type = self:currentToken().value
+            self:advance() -- Consume the type identifier
+        end
+    end
+    return type
+end
 function Parser:parseVariableDefinition()
     self:advance() -- Consume 'var'
     if self:currentToken().type ~= "IDENTIFIER" then
@@ -87,12 +99,13 @@ function Parser:parseVariableDefinition()
     end
     local varName = self:currentToken().value
     self:advance() -- Consume the identifier
+    local type = self:parseType()
     if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
         error("Expected '=' after variable name")
     end
     self:advance() -- Consume '='
     local value = self:parseExpression()
-    return { type = "VariableDefinition", name = varName, value = value }
+    return { type = "VariableDefinition", name = varName, value = value, vartype = type }
 end
 function Parser:parseConstDeclaration()
     self:advance() -- Consume 'const'
@@ -101,12 +114,13 @@ function Parser:parseConstDeclaration()
     end
     local constName = self:currentToken().value
     self:advance() -- Consume the identifier
+    local type = self:parseType()
     if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
         error("Expected '=' after constant name")
     end
     self:advance() -- Consume '='
     local value = self:parseExpression()
-    return { type = "ConstDeclaration", name = constName, value = value }
+    return { type = "ConstDeclaration", name = constName, value = value, vartype = type }
 end
 function Parser:parseFunctionDeclaration()
     self:advance()

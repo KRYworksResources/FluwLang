@@ -1,5 +1,6 @@
 local Evaluator = {}
 local Error = require("error")
+local Types = require("types")
 
 local function mix_tables(t1, t2)
     local base = table.clone(t1)
@@ -30,16 +31,25 @@ function Evaluator:setVariable(id, value, symbols)
     if not entry.mutable then
         handleError(`Cannot modify constant '{id}'.`)
     end
+    local typeaccepted = Types.isValueType(entry.type, entry, value)
+    if not typeaccepted then
+        handleError(`Invalid value given to type: {entry.type} = {value}`)
+    end
     entry.value = value
     return value
 end
 local function createVariable(value, type, symbolType, mutable)
-    return {
+    local var = {
         type = type,
         vartype = symbolType,
         value = value,
         mutable = mutable
     }
+    local typeaccepted = Types.isValueType(type, var, value)
+    if not typeaccepted then
+        handleError(`Invalid value given to type: {type} = {value}`)
+    end
+    return var
 end
 function Evaluator:declareSymbol(id, value, type, symbolType, mutable, symbols)
     if self:getSymbol(id, symbols) then
@@ -234,7 +244,7 @@ local node_type_cases = {
     end,
     ["VariableDefinition"] = function(self, node, variables)
         local value = self:evaluate(node.value, variables)
-        self:declareSymbol(node.name, value, nil, "any", true, variables)
+        self:declareSymbol(node.name, value, node.vartype, "any", true, variables)
         return value
     end,
     ["TempVariableDefinition"] = function(self, node, variables)
@@ -248,7 +258,7 @@ local node_type_cases = {
     end,
     ["ConstDeclaration"] = function(self, node, variables)
         local value = self:evaluate(node.value, variables)
-        self:declareSymbol(node.name, value, nil, "any", false, variables)
+        self:declareSymbol(node.name, value, node.vartype, "any", false, variables)
         return value
     end,
     ["FunctionDeclaration"] = function(self, node, variables)
