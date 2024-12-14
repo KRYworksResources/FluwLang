@@ -39,6 +39,9 @@ function Evaluator:setVariable(id, value, symbols)
     return value
 end
 local function createVariable(value, type, symbolType, mutable)
+    if type == "auto" then
+        type = Types.getDataTypeNameById(Types.luaGetValueType(value))
+    end
     local var = {
         type = type,
         vartype = symbolType,

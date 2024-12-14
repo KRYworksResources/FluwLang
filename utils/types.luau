@@ -16,6 +16,17 @@ local Types = {
     }
 }
 
+local reversedLookupDataTypes = {}
+do
+    for k,v in Types.DataTypes do
+        reversedLookupDataTypes[v] = k
+    end
+end
+
+function Types.getDataTypeNameById(id)
+    return reversedLookupDataTypes[id]
+end
+
 local Error = require("error")
 local function handleError(message)
     Error:error(message)
