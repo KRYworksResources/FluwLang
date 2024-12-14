@@ -1,6 +1,11 @@
 local Parser = {}
 local Error = require("error")
 
+local function handleError(message)
+    Error:error(message)
+    error(message)
+end
+
 Parser.Operator = {
     ["not"] = 5, -- Unary operator
     ["+"] = 2, -- Addition
@@ -45,8 +50,7 @@ function Parser:expectSemicolon()
     if self:currentToken().type == "SYMBOL" and self:currentToken().value == ";" then
         self:advance() -- Consume the semicolon
     else
-        Error:error("Expected ';' at the end of statement")
-        error("Expected ';' at the end of statement")
+        handleError("Expected ';' at the end of statement")
     end
 end
 -- Parse statements and variable definitions
@@ -74,7 +78,7 @@ function Parser:parseStatement()
         elseif self:currentToken().value == "do" then
             node = self:parseCodeblockStatement()
         else
-            error("Unknown keyword: " .. self:currentToken().value)
+            handleError("Unknown keyword: " .. self:currentToken().value)
         end
     else
         node = self:parseExpression()
@@ -97,13 +101,13 @@ end
 function Parser:parseVariableDefinition()
     self:advance() -- Consume 'var'
     if self:currentToken().type ~= "IDENTIFIER" then
-        error("Expected variable name after 'var'")
+        handleError("Expected variable name after 'var'")
     end
     local varName = self:currentToken().value
     self:advance() -- Consume the identifier
     local type = self:parseType()
     if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
-        error("Expected '=' after variable name")
+        handleError("Expected '=' after variable name")
     end
     self:advance() -- Consume '='
     local value = self:parseExpression()
@@ -112,13 +116,13 @@ end
 function Parser:parseConstDeclaration()
     self:advance() -- Consume 'const'
     if self:currentToken().type ~= "IDENTIFIER" then
-        error("Expected constant name after 'const'")
+        handleError("Expected constant name after 'const'")
     end
     local constName = self:currentToken().value
     self:advance() -- Consume the identifier
     local type = self:parseType()
     if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
-        error("Expected '=' after constant name")
+        handleError("Expected '=' after constant name")
     end
     self:advance() -- Consume '='
     local value = self:parseExpression()
@@ -128,7 +132,7 @@ end
 function Parser:parseParameterList()
     -- Parse the parameter list
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "(" then
-        error("Expected '(' after function name")
+        handleError("Expected '(' after function name")
     end
     self:advance() -- Consume '('
     local parameters = {}
@@ -136,7 +140,7 @@ function Parser:parseParameterList()
         while true do
             local paramToken = self:currentToken()
             if paramToken.type ~= "IDENTIFIER" then
-                Error:error("Expected parameter name in function declaration")
+                handleError("Expected parameter name in function declaration")
             end
             self:advance()
             table.insert(parameters, paramToken.value)
@@ -148,7 +152,7 @@ function Parser:parseParameterList()
         end
     end
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
-        error("Expected ')' after parameters")
+        handleError("Expected ')' after parameters")
     end
     self:advance() -- Consume ')'
     return parameters
@@ -159,14 +163,14 @@ function Parser:parseFunctionDeclaration()
     -- Parse the function name
     local nameToken = self:currentToken()
     if nameToken.type ~= "IDENTIFIER" then
-        self:error("Expected function name after 'fn'")
+        handleError("Expected function name after 'fn'")
     end
     self:advance()
     local functionName = nameToken.value
     local parameters = self:parseParameterList()
     -- Parse the function body
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
-        error("Expected '{' to start function body")
+        handleError("Expected '{' to start function body")
     end
     self:advance() -- Consume '{'
     local body = {
@@ -178,7 +182,7 @@ function Parser:parseFunctionDeclaration()
         table.insert(body.code, self:parseStatement())
     end
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
-        error("Expected '}' to end function body")
+        handleError("Expected '}' to end function body")
     end
     self:advance() -- Consume '}'
     -- Return the function declaration AST node
@@ -194,7 +198,7 @@ function Parser:parseLambdaExpression()
     local parameters = self:parseParameterList()
     -- Parse the function body
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
-        error("Expected '{' to start function body")
+        handleError("Expected '{' to start function body")
     end
     self:advance() -- Consume '{'
     local body = {
@@ -206,7 +210,7 @@ function Parser:parseLambdaExpression()
         table.insert(body.code, self:parseStatement())
     end
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
-        error("Expected '}' to end function body")
+        handleError("Expected '}' to end function body")
     end
     self:advance() -- Consume '}'
     -- Return the function declaration AST node
@@ -219,7 +223,7 @@ end
 function Parser:parseCodeblockStatement()
     self:advance() -- Consume 'do'
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "{" then
-        error("Expected '{' to start block body")
+        handleError("Expected '{' to start block body")
     end
     self:advance() -- Consume '{'
     local node = {
@@ -231,7 +235,7 @@ function Parser:parseCodeblockStatement()
         table.insert(node.code, self:parseStatement())
     end
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
-        error("Expected '}' to end block body")
+        handleError("Expected '}' to end block body")
     end
     self:advance() -- Consume '}'
     return node
@@ -253,16 +257,16 @@ end
 function Parser:parseIfStatement()
     self:advance() -- Consume 'if'
     if self:currentToken().value ~= "(" then
-        error("Expected '(' after 'if'")
+        handleError("Expected '(' after 'if'")
     end
     self:advance() -- Consume '('
     local condition = self:parseExpression() -- Parse the condition
     if self:currentToken().value ~= ")" then
-        error("Expected ')' after condition")
+        handleError("Expected ')' after condition")
     end
     self:advance() -- Consume ')'
     if self:currentToken().value ~= "{" then
-        error("Expected '{' to start if block")
+        handleError("Expected '{' to start if block")
     end
     self:advance() -- Consume '{'
     local thenBlock = {
@@ -278,7 +282,7 @@ function Parser:parseIfStatement()
     if self:currentToken().value == "else" then
         self:advance() -- Consume 'else'
         if self:currentToken().value ~= "{" then
-            error("Expected '{' after 'else'")
+            handleError("Expected '{' after 'else'")
         end
         self:advance() -- Consume '{'
         elseBlock = {
@@ -303,16 +307,16 @@ end
 function Parser:parseWhileStatement()
     self:advance() -- Consume 'while'
     if self:currentToken().value ~= "(" then
-        error("Expected '(' after 'while'")
+        handleError("Expected '(' after 'while'")
     end
     self:advance() -- Consume '('
     local condition = self:parseExpression() -- Parse the condition
     if self:currentToken().value ~= ")" then
-        error("Expected ')' after condition")
+        handleError("Expected ')' after condition")
     end
     self:advance() -- Consume ')'
     if self:currentToken().value ~= "{" then
-        error("Expected '{' to start while block")
+        handleError("Expected '{' to start while block")
     end
     self:advance() -- Consume '{'
     local codeBlock = {
@@ -333,20 +337,20 @@ end
 function Parser:parseForStatement()
     self:advance() -- Consume 'for'
     if self:currentToken().value ~= "(" then
-        error("Expected '(' after 'for'")
+        handleError("Expected '(' after 'for'")
     end
     self:advance() -- Consume '('
     if self:currentToken().value ~= "var" then
-        error("Expected variable defition after '('")
+        handleError("Expected variable defition after '('")
     end
     self:advance() -- Consume 'var'
     if self:currentToken().type ~= "IDENTIFIER" then
-        error("Expected variable name after 'var'")
+        handleError("Expected variable name after 'var'")
     end
     local varName = self:currentToken().value
     self:advance() -- Consume the identifier
     if self:currentToken().type ~= "OPERATOR" or self:currentToken().value ~= "=" then
-        error("Expected '=' after variable name")
+        handleError("Expected '=' after variable name")
     end
     self:advance() -- Consume '='
     local value = self:parseExpression()
@@ -356,11 +360,11 @@ function Parser:parseForStatement()
     self:expectSemicolon()
     local operation = self:parseExpression() -- Parse the operation
     if self:currentToken().value ~= ")" then
-        error("Expected ')' after condition")
+        handleError("Expected ')' after condition")
     end
     self:advance() -- Consume ')'
     if self:currentToken().value ~= "{" then
-        error("Expected '{' to start for block")
+        handleError("Expected '{' to start for block")
     end
     self:advance() -- Consume '{'
     local codeBlock = {
@@ -383,34 +387,34 @@ end
 function Parser:parseForEachStatement()
     self:advance() -- Consume 'for'
     if self:currentToken().value ~= "(" then
-        error("Expected '(' after 'foreach'")
+        handleError("Expected '(' after 'foreach'")
     end
     self:advance() -- Consume '('
     if self:currentToken().type ~= "IDENTIFIER" then
-        error("Expected index identifier after '('")
+        handleError("Expected index identifier after '('")
     end
     local key_id = self:currentToken().value
     self:advance() -- Consume the key
     if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "," then
-        error("Expected ',' after key name")
+        handleError("Expected ',' after key name")
     end
     self:advance() -- Consume ','
     if self:currentToken().type ~= "IDENTIFIER" then
-        error("Expected value identifier after key")
+        handleError("Expected value identifier after key")
     end
     local value_id = self:currentToken().value
     self:advance() -- Consume the value
     if self:currentToken().type ~= "KEYWORD" or self:currentToken().value ~= "in" then
-        error("Expected 'in' after value name")
+        handleError("Expected 'in' after value name")
     end
     self:advance() -- Consume 'in'
     local source = self:parseExpression()
     if self:currentToken().value ~= ")" then
-        error("Expected ')' after condition")
+        handleError("Expected ')' after condition")
     end
     self:advance() -- Consume ')'
     if self:currentToken().value ~= "{" then
-        error("Expected '{' to start foreach block")
+        handleError("Expected '{' to start foreach block")
     end
     self:advance() -- Consume '{'
     local codeBlock = {
@@ -446,8 +450,7 @@ function Parser:parseArray()
         if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
             self:advance() -- Skip the ','
         elseif self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "]" then
-            Error:error("Expected ',' or ']', but got " .. (self:currentToken().value or "EOF"), nil, self.position)
-            error("Parsing error")
+            handleError("Expected ',' or ']', but got " .. (self:currentToken().value or "EOF"))
         end
     end
     self:advance() -- Skip the ']'
@@ -460,8 +463,7 @@ function Parser:parseDictionary()
     while self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" do
         local key = self:parseExpression()
         if not (self:currentToken().type == "SYMBOL" and self:currentToken().value == ":") then
-            Error:error("Expected ':' after key in dictionary", nil, self.position)
-            error("Parsing error")
+            handleError("Expected ':' after key in dictionary")
         end
         self:advance() -- Skip the ':'
         local value = self:parseExpression()
@@ -469,8 +471,7 @@ function Parser:parseDictionary()
         if self:currentToken().type == "SYMBOL" and self:currentToken().value == "," then
             self:advance() -- Skip the ','
         elseif self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "}" then
-            Error:error("Expected ',' or '}', but got " .. (self:currentToken().value or "EOF"), nil, self.position)
-            error("Parsing error")
+            handleError("Expected ',' or '}', but got " .. (self:currentToken().value or "EOF"))
         end
     end
     self:advance() -- Skip the '}'
@@ -552,8 +553,7 @@ function Parser:parseIdentifierExtensions(baseNode)
             self:advance() -- Consume `[`
             local index = self:parseExpression()
             if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= "]" then
-                Error:error("Expected closing ']' for indexing")
-                error("Expected closing ']' for indexing")
+                handleError("Expected closing ']' for indexing")
             end
             self:advance() -- Consume `]`
             currentNode = {
@@ -565,8 +565,7 @@ function Parser:parseIdentifierExtensions(baseNode)
             -- Handle `table.key`
             self:advance() -- Consume `.`
             if self:currentToken().type ~= "IDENTIFIER" then
-                Error:error("Expected identifier after '.'")
-                error("Expected identifier after '.'")
+                handleError("Expected identifier after '.'")
             end
             local key = self:currentToken().value
             self:advance()
@@ -590,7 +589,7 @@ function Parser:parseIdentifierExtensions(baseNode)
                 end
             end
             if self:currentToken().type ~= "SYMBOL" or self:currentToken().value ~= ")" then
-                error("Expected ')' after arguments")
+                handleError("Expected ')' after arguments")
             end
             self:advance() -- Consume ')'
             return {
@@ -632,8 +631,7 @@ function Parser:parsePrimary()
             if self:currentToken().type == "SYMBOL" and self:currentToken().value == ")" then
                 self:advance()
             else
-                Error:error("Expected ')'")
-                error("Expected ')'")
+                handleError("Expected ')'")
             end
             return expression
         elseif token.value == "[" then
@@ -657,8 +655,8 @@ function Parser:parsePrimary()
         local expression = self:parsePrimary()
         return { type = "UnaryExpression", operator = "not", value = expression }
     end
-    Error:error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
-    error(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
+    handleError(`Unexpected token: {token.value or "EOF"}#{token.type or "EOF"}`)
+    return
 end
 
 return Parser

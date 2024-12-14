@@ -281,22 +281,21 @@ local node_type_cases = {
     end,
     ["FunctionCall"] = function(self, node, variables)
         local base = node.base
-        local fnEntry = self:getSymbol(base.value, variables)
-        local fnValue = fnEntry.value
-        if type(fnValue) == "table" then
-            if not fnValue.type or fnValue.type ~= "fn" then
+        local fnEntry = self:evaluate(base, variables)
+        if type(fnEntry) == "table" then
+            if not fnEntry.type or fnEntry.type ~= "fn" then
                 handleError(`'{base.value}' is not a function.`)
             end
-            if #node.args ~= #fnEntry.value.arguments then
-                handleError(`Function '{base.value}' expects {#fnValue.arguments} arguments, got {#node.args}.`)
+            if #node.args ~= #fnEntry.arguments then
+                handleError(`Function '{base.value}' expects {#fnEntry.arguments} arguments, got {#node.args}.`)
             end
             local localVars = {}
-            for i, argName in fnValue.arguments do
+            for i, argName in fnEntry.arguments do
                 localVars[argName] = createVariable(self:evaluate(node.args[i], variables), nil, "any", true)
             end
-            return self:evaluate(fnEntry.value.body, mix_tables(variables, localVars))
-        elseif type(fnValue) == "function" then
-            return fnValue(table.unpack(node.args))
+            return self:evaluate(fnEntry.body, mix_tables(variables, localVars))
+        elseif type(fnEntry) == "function" then
+            return fnEntry(table.unpack(node.args))
         end
         return
     end,
