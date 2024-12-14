@@ -3,7 +3,8 @@ local input = [[
     fn a(b, c) {
         return b + c;
     };
-    return a(1, 2);
+    var one = 1;
+    return a(one, 2);
 ]]
 local targetresult = 3
 return function()

@@ -292,7 +292,7 @@ local node_type_cases = {
             end
             local localVars = {}
             for i, argName in fnValue.arguments do
-                localVars[argName] = node.args[i]
+                localVars[argName] = createVariable(self:evaluate(node.args[i], variables), nil, "any", true)
             end
             return self:evaluate(fnEntry.value.body, mix_tables(variables, localVars))
         elseif type(fnValue) == "function" then
