@@ -28,6 +28,8 @@ Lexer.Keywords = {
     ["foreach"] = true,
     ["in"] = true,
     ["do"] = true,
+    ["continue"] = true,
+    ["break"] = true,
 }
 Lexer.Operators = {
     ["+"] = "ADD",
@@ -77,7 +79,14 @@ function Lexer.new(input)
     local self = setmetatable({}, { __index = Lexer })
     self.input = input
     self.position = 1
+    self.line_id = 1
+    self.line_position = 1
     return self
+end
+
+function Lexer:error(err)
+    Error:error(err, self.line_id, self.line_position)
+    error(err)
 end
 
 -- Helper: Check if a character is a letter or a symbol
@@ -106,10 +115,20 @@ end
 -- Advance to the next character
 function Lexer:advance()
     self.position += 1
+    self.line_position += 1
+end
+-- Insert line and character position to node
+function Lexer:insertPosition(node)
+    node.position = self.line_position
+    node.line = self.line_id
 end
 -- Skip whitespace
 function Lexer:skipWhitespace()
     while self:currentChar():match("%s") do
+        if self:currentChar() == "\n" then
+            self.line_id += 1
+            self.line_position = 1
+        end
         self:advance()
     end
 end
@@ -147,8 +166,7 @@ function Lexer:readString()
             elseif escaped == "\"" or escaped == "'" then
                 value = value .. escaped
             else
-                Error:error("Invalid escape sequence: \\" .. escaped, nil, self.position)
-                error("Invalid escape sequence: \\" .. escaped)
+                self:error("Invalid escape sequence: \\" .. escaped)
             end
         else
             value ..= self:currentChar()
@@ -157,8 +175,7 @@ function Lexer:readString()
     end
 
     if self:currentChar() ~= quote then
-        Error:error("Unterminated string literal", nil, self.position)
-        error("Unterminated string literal")
+        self:error("Unterminated string literal")
     end
 
     self:advance() -- Skip the closing quote
@@ -199,42 +216,49 @@ function Lexer:readOperator()
     if Lexer.Operators[operator] then
         return { type = Lexer.TokenType.OPERATOR, value = operator }
     else
-        error("Unknown operator: " .. operator)
+        self:error("Unknown operator: " .. operator)
+        return
     end
 end
 -- Get the next token
 function Lexer:nextToken()
     self:skipWhitespace()
     self:skipComment()
+    self:skipWhitespace()
     local char = self:currentChar()
+    local node
     if not char or char == "" then
-        return { type = Lexer.TokenType.EOF, line = self.position }
+        node = { type = Lexer.TokenType.EOF, line = self.position }
     elseif isDigit(char) then
-        return self:readNumber()
+        node = self:readNumber()
     elseif isSymbol(char) then
         self:advance()
-        return { type = Lexer.TokenType.SYMBOL, value = char }
+        node = { type = Lexer.TokenType.SYMBOL, value = char }
     elseif isOperator(char) then
         local nextchar = self.input:sub(self.position+1, self.position+1)
         if nextchar ~= "" and isOperator(char..nextchar) then
             self:advance()
             self:advance()
-            return { type = Lexer.TokenType.OPERATOR, value = char..nextchar }
+            node = { type = Lexer.TokenType.OPERATOR, value = char..nextchar }
+        else
+            self:advance()
+            node = { type = Lexer.TokenType.OPERATOR, value = char }
         end
-        self:advance()
-        return { type = Lexer.TokenType.OPERATOR, value = char }
     elseif char == "\"" or char == "'" then -- String literals
-        return self:readString()
+        node = self:readString()
     elseif isChar(char) then -- Identifiers start with a letter
         local word = self:readWord()
         if isOperator(word) then
-            return { type = Lexer.TokenType.OPERATOR, value = word }
+            node = { type = Lexer.TokenType.OPERATOR, value = word }
         elseif isLetter(char) then
-            return self:readIdentifier(word)
+            node = self:readIdentifier(word)
         end
     end
-    Error:error("Unexpected character: " .. char, nil, self.position)
-    error("Unexpected character: " .. char)
+    if not node then
+        self:error("Unexpected character: " .. char)
+    end
+    self:insertPosition(node)
+    return node
 end
 
 return Lexer

@@ -9,10 +9,6 @@ local function mix_tables(t1, t2)
     end
     return base
 end
-local function handleError(message)
-    Error:error(message)
-    error(message)
-end
 
 function Evaluator:getSymbol(id, symbols)
     local entry = (symbols or {})[id] or self.symbolTable[id]
@@ -26,19 +22,19 @@ function Evaluator:setVariable(id, value, symbols)
         if self.parent then
             return self.parent:setVariable(id, value)
         end
-        handleError(`Variable '{id}' is undefined.`)
+        self:handleError(`Variable '{id}' is undefined.`)
     end
     if not entry.mutable then
-        handleError(`Cannot modify constant '{id}'.`)
+        self:handleError(`Cannot modify constant '{id}'.`)
     end
     local typeaccepted = Types.isValueType(entry.type, entry, value)
     if not typeaccepted then
-        handleError(`Invalid value given to type: {entry.type} = {value}`)
+        self:handleError(`Invalid value given to type: {entry.type} = {value}`)
     end
     entry.value = value
     return value
 end
-local function createVariable(value, type, symbolType, mutable)
+local function createVariable(self, value, type, symbolType, mutable)
     if type == "auto" then
         type = Types.getDataTypeNameById(Types.luaGetValueType(value))
     end
@@ -50,15 +46,15 @@ local function createVariable(value, type, symbolType, mutable)
     }
     local typeaccepted = Types.isValueType(type, var, value)
     if not typeaccepted then
-        handleError(`Invalid value given to type: {type} = {value}`)
+        self:handleError(`Invalid value given to type: {type} = {value}`)
     end
     return var
 end
 function Evaluator:declareSymbol(id, value, type, symbolType, mutable, symbols)
     if self:getSymbol(id, symbols) then
-        handleError(`Symbol '{id}' is already declared.`)
+        self:handleError(`Symbol '{id}' is already declared.`)
     end
-    self.symbolTable[id] = createVariable(value, type, symbolType, mutable)
+    self.symbolTable[id] = createVariable(self, value, type, symbolType, mutable)
 end
 
 local function switch_case(var, cases, default, ...)
@@ -116,7 +112,7 @@ local node_type_cases = {
         elseif operator == "not" then return not value
         elseif operator == "~" then return bit32.bnot(value)
         end
-        handleError("Unknown unary operator: " .. node.operator)
+        self:handleError("Unknown unary operator: " .. node.operator)
         return
     end,
     ["ArrayExpression"] = function(self, node, variables)
@@ -139,9 +135,9 @@ local node_type_cases = {
         local table = self:evaluate(node.base, variables)
         local index = self:evaluate(node.index, variables)
         if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
-            handleError(`Attempted to index array with non-integer value: {index}`)
+            self:handleError(`Attempted to index array with non-integer value: {index}`)
         elseif table.type == "fn" then
-            handleError(`Attempted to index a function value`)
+            self:handleError(`Attempted to index a function value`)
         end
         return table.value[index]
     end,
@@ -149,7 +145,7 @@ local node_type_cases = {
         local left = self:evaluate(node.left, variables)
         local right = self:evaluate(node.right, variables)
         return switch_case(node.operator, binary_expression_cases, function()
-            handleError("Unknown operator: " .. node.operator)
+            self:handleError("Unknown operator: " .. node.operator)
         end, left, right)
     end,
     ["IfStatement"] = function(self, node, variables)
@@ -190,8 +186,8 @@ local node_type_cases = {
         local source = self:evaluate(node.source, variables)
         for k, v in source.value do
             if self.resulted then break end
-            variables[kn] = createVariable(k, nil, "loop", true)
-            variables[vn] = createVariable(v, nil, "loop", true)
+            variables[kn] = createVariable(self, k, nil, "loop", true)
+            variables[vn] = createVariable(self, v, nil, "loop", true)
             self:evaluate(codeblock, variables)
         end
     end,
@@ -214,15 +210,15 @@ local node_type_cases = {
             local table = self:evaluate(target.base, variables)
             local index = self:evaluate(target.index, variables)
             if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
-                handleError(`Attempted to index array with non-integer value: {index}`)
+                self:handleError(`Attempted to index array with non-integer value: {index}`)
             elseif table.type == "fn" then
-                handleError(`Attempted to index a function value`)
+                self:handleError(`Attempted to index a function value`)
             end
             table.value[index] = value
         elseif node.target.type == "Identifier" then
             self:setVariable(target.value, value, variables)
         else
-            handleError(`Invalid assignee ({target.type}) given to assignment`)
+            self:handleError(`Invalid assignee ({target.type}) given to assignment`)
         end
         return value
     end,
@@ -234,21 +230,21 @@ local node_type_cases = {
             local table = self:evaluate(target.base, variables)
             local index = self:evaluate(target.index, variables)
             if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
-                handleError(`Attempted to index array with non-integer value: {index}`)
+                self:handleError(`Attempted to index array with non-integer value: {index}`)
             elseif table.type == "fn" then
-                handleError(`Attempted to index a function value`)
+                self:handleError(`Attempted to index a function value`)
             end
             table.value[index] = switch_case(operator, binary_expression_cases, function()
-                handleError("Unsupported operator in compound assignment: " .. operator)
+                self:handleError("Unsupported operator in compound assignment: " .. operator)
             end, table.value[index], value)
         elseif target.type == "Identifier" then
             local current = self:evaluate(target, variables)
             local target_value = switch_case(operator, binary_expression_cases, function()
-                handleError("Unsupported operator in compound assignment: " .. operator)
+                self:handleError("Unsupported operator in compound assignment: " .. operator)
             end, current, value)
             self:setVariable(target.value, target_value, variables)
         else
-            handleError(`Invalid assignee ({target.type}) given to assignment`)
+            self:handleError(`Invalid assignee ({target.type}) given to assignment`)
         end
         return value
     end,
@@ -260,10 +256,10 @@ local node_type_cases = {
     ["TempVariableDefinition"] = function(self, node, variables)
         local name = node.name
         if self:getSymbol(name, variables) then
-            handleError(`Symbol '{name}' is already declared.`)
+            self:handleError(`Symbol '{name}' is already declared.`)
         end
         local value = self:evaluate(node.value, variables)
-        variables[name] = createVariable(value, nil, "any", true)
+        variables[name] = createVariable(self, value, nil, "any", true)
         return value
     end,
     ["ConstDeclaration"] = function(self, node, variables)
@@ -284,14 +280,14 @@ local node_type_cases = {
         local fnEntry = self:evaluate(base, variables)
         if type(fnEntry) == "table" then
             if not fnEntry.type or fnEntry.type ~= "fn" then
-                handleError(`'{base.value}' is not a function.`)
+                self:handleError(`'{base.value}' is not a function.`)
             end
             if #node.args ~= #fnEntry.arguments then
-                handleError(`Function '{base.value}' expects {#fnEntry.arguments} arguments, got {#node.args}.`)
+                self:handleError(`Function '{base.value}' expects {#fnEntry.arguments} arguments, got {#node.args}.`)
             end
             local localVars = {}
             for i, argName in fnEntry.arguments do
-                localVars[argName] = createVariable(self:evaluate(node.args[i], variables), nil, "any", true)
+                localVars[argName] = createVariable(self, self:evaluate(node.args[i], variables), nil, "any", true)
             end
             return self:evaluate(fnEntry.body, mix_tables(variables, localVars))
         elseif type(fnEntry) == "function" then
@@ -307,7 +303,7 @@ local node_type_cases = {
         local name = node.value
         local symbol = self:getSymbol(name, variables)
         if not symbol then
-            handleError(`Undefined identifier: '{name}'`)
+            self:handleError(`Undefined identifier: '{name}'`)
         end
         return symbol.value
     end,
@@ -323,11 +319,12 @@ function Evaluator:evaluate(node, symbols)
     if self.resulted then return self.result end
     symbols = symbols or {}
     if not node then
-        handleError("Nil node given to evaluator")
+        self:handleError("Nil node given to evaluator")
         return
     end
+    self.parsing = node
     return switch_case(node.type, node_type_cases, function()
-        handleError(`Unknown node type: {node.type}`)
+        self:handleError(`Unknown node type: {node.type}`)
     end, self, node, symbols)
 end
 
@@ -350,12 +347,19 @@ function Evaluator:getResult()
     return result 
 end
 
+function Evaluator:handleError(message)
+    local curr = self.parsing
+    Error:error(message, curr.line, curr.position)
+    error(message)
+end
+
 function Evaluator.new()
     local self = setmetatable({}, { __index = Evaluator })
     self.symbolTable = {} -- Centralized symbol storage
     self.result = nil -- Stores result given by a return statement
     self.resulted = false -- Is this evaluator finished?
     self.parent = nil -- Parent scope evaluator
+    self.parsing = nil -- Currently parsed node
     return self
 end
 
