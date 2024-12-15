@@ -160,10 +160,17 @@ local node_type_cases = {
         local condnode = node.condition
         local codeblock = node.codeBlock
         local condition = self:evaluate(condnode, variables)
+        self.loopContext = { breakFlag = false, continueFlag = false }
         while condition and not self.resulted do
             self:evaluate(codeblock, variables)
+            if self.loopContext.breakFlag then
+                break
+            elseif self.loopContext.continueFlag then
+                self.loopContext.continueFlag = false -- Reset 'continue'
+            end
             condition = self:evaluate(condnode, variables)
         end
+        self.loopContext = nil
     end,
     ["ForStatement"] = function(self, node, variables)
         self:evaluate(node.definition, variables)
@@ -171,11 +178,18 @@ local node_type_cases = {
         local opnode = node.operation
         local codeblock = node.codeBlock
         local condition = self:evaluate(condnode, variables)
+        self.loopContext = { breakFlag = false, continueFlag = false }
         while condition and not self.resulted do
             condition = self:evaluate(condnode, variables)
             self:evaluate(codeblock, variables)
             self:evaluate(opnode, variables)
+            if self.loopContext.breakFlag then
+                break
+            elseif self.loopContext.continueFlag then
+                self.loopContext.continueFlag = false -- Reset 'continue'
+            end
         end
+        self.loopContext = nil
     end,
     ["ForEachStatement"] = function(self, node, variables)
         local key, value = node.key, node.value
@@ -184,18 +198,30 @@ local node_type_cases = {
         self:evaluate(key, variables)
         self:evaluate(value, variables)
         local source = self:evaluate(node.source, variables)
+        self.loopContext = { breakFlag = false, continueFlag = false }
         for k, v in source.value do
             if self.resulted then break end
             variables[kn] = createVariable(self, k, nil, "loop", true)
             variables[vn] = createVariable(self, v, nil, "loop", true)
             self:evaluate(codeblock, variables)
+            if self.loopContext.breakFlag then
+                break
+            elseif self.loopContext.continueFlag then
+                self.loopContext.continueFlag = false -- Reset 'continue'
+            end
         end
+        self.loopContext = nil
     end,
     ["CodeBlock"] = function(self, node, variables)
 	    local nself = Evaluator.new()
+        nself.loopContext = self.loopContext
         nself.parent = self
         for _, block in node.code do
             nself:evaluate(block, variables)
+            -- If part of a loop and break/continue is encountered, stop execution
+            if nself.loopContext and (nself.loopContext.breakFlag or nself.loopContext.continueFlag) then
+                break
+            end
         end
         if node.blocktype == "block" and nself.resulted then
             self.resulted = true
@@ -313,6 +339,16 @@ local node_type_cases = {
         self.result = value
         return value
     end,
+    ["SkipStatement"] = function(self, node, _variables)
+        if not self.loopContext then
+            self:handleError("Skip statement used outside of a loop.")
+        end
+        if node.value then
+            self.loopContext.breakFlag = true
+        else
+            self.loopContext.continueFlag = true
+        end
+    end,
 }
 
 function Evaluator:evaluate(node, symbols)
@@ -360,6 +396,7 @@ function Evaluator.new()
     self.resulted = false -- Is this evaluator finished?
     self.parent = nil -- Parent scope evaluator
     self.parsing = nil -- Currently parsed node
+    self.loopContext = nil -- Looping context system
     return self
 end
 

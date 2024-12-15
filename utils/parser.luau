@@ -87,8 +87,10 @@ function Parser:parseStatement()
         elseif self:currentToken().value == "do" then
             node = self:parseCodeblockStatement()
         elseif self:currentToken().value == "continue" then
+            self:advance()
             node = { type = "SkipStatement", value = false; }
         elseif self:currentToken().value == "break" then
+            self:advance()
             node = { type = "SkipStatement", value = true; }
         else
             self:handleError("Unknown keyword: " .. self:currentToken().value)
