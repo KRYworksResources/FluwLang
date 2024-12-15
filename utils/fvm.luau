@@ -29,8 +29,17 @@ function FluwVM:pushToEnv(key:string, value:any, typecheck:boolean?)
     self.Evaluator:declareSymbol(key, value, datatype, "luanative", true, {})
 end
 function FluwVM:pullFromEnv(key:string)
-    local value = self.Evaluator:getSymbol(key, {})
-    return value.value
+    local entry = self.Evaluator:getSymbol(key, {})
+    if not entry then return end
+    local value = entry.value
+    if type(value) == "table" then
+        if value.type == "fn" then
+            return self.Evaluator:fluwFnToFunction(value)
+        else
+            return value.value
+        end
+    end
+    return value
 end
 function FluwVM:getResult()
     return self.Evaluator:getResult()

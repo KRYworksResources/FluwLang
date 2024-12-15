@@ -53,7 +53,7 @@ local function isArray(tbl)
     return type(tbl) == "table" and (#tbl > 0 or next(tbl) == nil)
 end
 function Types.isValueType(datatype, entry, value)
-    if not datatype then return true end
+    if not datatype or not value then return true end
     if type(datatype) == "string" then
         datatype = Types.DataTypes[entry.type or "unknown"] or Types.DataTypes.any
     end

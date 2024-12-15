@@ -366,7 +366,15 @@ end
 
 function Evaluator:fluwFnToFunction(fn)
     return function(...)
-        --TODO
+        -- Create a new evaluator for the function's execution
+        local funcEvaluator = Evaluator.new()
+        funcEvaluator.parent = self -- Link parent for variable scope access
+        -- Bind the function's arguments to its arguments
+        local argValues = {...}
+        for i, paramName in fn.arguments do
+            funcEvaluator.symbolTable[paramName] = createVariable(self, argValues[i], nil, "luacall", true) or nil
+        end
+        return funcEvaluator:evaluate(fn.body)
     end
 end
 
@@ -385,7 +393,11 @@ end
 
 function Evaluator:handleError(message)
     local curr = self.parsing
-    Error:error(message, curr.line, curr.position)
+    local line, pos
+    if curr then
+        line, pos = curr.line, curr.position
+    end
+    Error:error(message, line, pos)
     error(message)
 end
 
