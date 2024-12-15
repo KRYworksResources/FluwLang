@@ -2,6 +2,8 @@ local Evaluator = {}
 local Error = require("error")
 local Types = require("types")
 
+-- used by function calls to add arguments into env
+-- combines 2 tables together
 local function mix_tables(t1, t2)
     local base = table.clone(t1)
     for k, v in t2 do
@@ -10,6 +12,7 @@ local function mix_tables(t1, t2)
     return base
 end
 
+-- get a variable from the current evaluator or its parent if possible
 function Evaluator:getSymbol(id, symbols)
     local entry = (symbols or {})[id] or self.symbolTable[id]
     if entry then return entry end
@@ -34,6 +37,8 @@ function Evaluator:setVariable(id, value, symbols)
     entry.value = value
     return value
 end
+
+-- create a variable table that holds all values needed
 local function createVariable(self, value, type, symbolType, mutable)
     if type == "auto" then
         type = Types.getDataTypeNameById(Types.luaGetValueType(value))
@@ -57,11 +62,13 @@ function Evaluator:declareSymbol(id, value, type, symbolType, mutable, symbols)
     self.symbolTable[id] = createVariable(self, value, type, symbolType, mutable)
 end
 
+-- a general switch case system (slower than normal if but faster than 10 elseifs)
 local function switch_case(var, cases, default, ...)
     local f = cases[var] or default
     return f and f(...)
 end
 
+-- math and logic cases
 local binary_expression_cases = {
     ["+"] = function(left, right)
         if type(left) == "string" or type(right) == "string" then
@@ -91,6 +98,7 @@ local binary_expression_cases = {
     [">>"] = function(left, right) return bit32.rshift(left, right) end,
 }
 
+-- all node types and their cases
 local node_type_cases = {
     ["NullPointer"] = function(_self, _node, _variables)
         return nil
@@ -99,6 +107,7 @@ local node_type_cases = {
         return node.value
     end,
     ["LambdaLiteral"] = function(_self, node, _variables)
+        -- this is a really simplified function value as a literal
         return {
             arguments = node.arguments,
             body = node.body,
@@ -106,6 +115,7 @@ local node_type_cases = {
         }
     end,
     ["UnaryExpression"] = function(self, node, variables)
+        -- this is basically stuff that comes before a literal
         local value = self:evaluate(node.value, variables)
         local operator = node.operator
         if operator == "-" then return -value
@@ -116,6 +126,7 @@ local node_type_cases = {
         return
     end,
     ["ArrayExpression"] = function(self, node, variables)
+        -- "array" value construction (its just a table)
         local array = {}
         for _, elementNode in ipairs(node.elements) do
             table.insert(array, self:evaluate(elementNode, variables))
@@ -123,9 +134,10 @@ local node_type_cases = {
         return { type = "array", value = array }
     end,
     ["DictExpression"] = function(self, node, variables)
+        -- dictionaries are just luau tables
         local dict = {}
         for k, v in node.pairs do
-            local key = self:evaluate(k, variables)
+            local key = self:evaluate(k, variables) -- this lets us use anything as a key
             local value = self:evaluate(v, variables)
             dict[key] = value
         end
@@ -135,13 +147,16 @@ local node_type_cases = {
         local table = self:evaluate(node.base, variables)
         local index = self:evaluate(node.index, variables)
         if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
+            -- arrays can only be indexed by integer values
             self:handleError(`Attempted to index array with non-integer value: {index}`)
         elseif table.type == "fn" then
+            -- this value is most likely a function
             self:handleError(`Attempted to index a function value`)
         end
         return table.value[index]
     end,
     ["BinaryExpression"] = function(self, node, variables)
+        -- math and logic stuff
         local left = self:evaluate(node.left, variables)
         local right = self:evaluate(node.right, variables)
         return switch_case(node.operator, binary_expression_cases, function()
@@ -161,6 +176,7 @@ local node_type_cases = {
         local codeblock = node.codeBlock
         local condition = self:evaluate(condnode, variables)
         self.loopContext = { breakFlag = false, continueFlag = false }
+        -- ^ this indicates that we are in a loop
         while condition and not self.resulted do
             self:evaluate(codeblock, variables)
             if self.loopContext.breakFlag then
@@ -170,6 +186,7 @@ local node_type_cases = {
             end
             condition = self:evaluate(condnode, variables)
         end
+        -- v no longer in a loop
         self.loopContext = nil
     end,
     ["ForStatement"] = function(self, node, variables)
@@ -177,8 +194,10 @@ local node_type_cases = {
         local condnode = node.condition
         local opnode = node.operation
         local codeblock = node.codeBlock
+        -- you can literally put anything in condition lol
         local condition = self:evaluate(condnode, variables)
         self.loopContext = { breakFlag = false, continueFlag = false }
+        -- ^ same as while
         while condition and not self.resulted do
             condition = self:evaluate(condnode, variables)
             self:evaluate(codeblock, variables)
@@ -187,6 +206,7 @@ local node_type_cases = {
                 break
             elseif self.loopContext.continueFlag then
                 self.loopContext.continueFlag = false -- Reset 'continue'
+                -- we do this or we never get out of continued state
             end
         end
         self.loopContext = nil
@@ -203,6 +223,9 @@ local node_type_cases = {
             if self.resulted then break end
             variables[kn] = createVariable(self, k, nil, "loop", true)
             variables[vn] = createVariable(self, v, nil, "loop", true)
+            -- we create new variables so we dont make stuff out of scope
+            -- i think having direct access to the evaluator used for the
+            -- codeblock would make this better (types and shit)
             self:evaluate(codeblock, variables)
             if self.loopContext.breakFlag then
                 break
@@ -213,17 +236,23 @@ local node_type_cases = {
         self.loopContext = nil
     end,
     ["CodeBlock"] = function(self, node, variables)
+        -- never let me write code again after this bullshit
 	    local nself = Evaluator.new()
         nself.loopContext = self.loopContext
         nself.parent = self
+        -- create new evaluator to create a new scope
         for _, block in node.code do
             nself:evaluate(block, variables)
             -- If part of a loop and break/continue is encountered, stop execution
             if nself.loopContext and (nself.loopContext.breakFlag or nself.loopContext.continueFlag) then
+                -- stop executing if we are in a loop and we skipped
                 break
             end
         end
         if node.blocktype == "block" and nself.resulted then
+            -- this fucking sucks
+            -- i need something better than this
+            -- TODO: write a better result system
             self.resulted = true
             self.result = nself.result
         end
@@ -232,7 +261,9 @@ local node_type_cases = {
     ["AssignmentExpression"] = function(self, node, variables)
         local value = self:evaluate(node.value, variables)
         local target = node.target
+        -- writing expression
         if target.type == "TableIndex" then
+            -- write to tables
             local table = self:evaluate(target.base, variables)
             local index = self:evaluate(target.index, variables)
             if table.type == "array" and (typeof(index) ~= "number" and index % 1 ~= 0) then
@@ -242,13 +273,16 @@ local node_type_cases = {
             end
             table.value[index] = value
         elseif node.target.type == "Identifier" then
+            -- write to variables
             self:setVariable(target.value, value, variables)
         else
+            -- we dont even know what you are trying to write into
             self:handleError(`Invalid assignee ({target.type}) given to assignment`)
         end
         return value
     end,
     ["CompoundAssignmentExpression"] = function(self, node, variables)
+        -- see `AssignmentExpression`
         local value = self:evaluate(node.value, variables)
         local target = node.target
         local operator = node.operator
@@ -275,11 +309,13 @@ local node_type_cases = {
         return value
     end,
     ["VariableDefinition"] = function(self, node, variables)
+        -- define variable
         local value = self:evaluate(node.value, variables)
         self:declareSymbol(node.name, value, node.vartype, "any", true, variables)
         return value
     end,
     ["TempVariableDefinition"] = function(self, node, variables)
+        -- define a variable at this evaluators scope???? idk why this exists
         local name = node.name
         if self:getSymbol(name, variables) then
             self:handleError(`Symbol '{name}' is already declared.`)
@@ -289,11 +325,13 @@ local node_type_cases = {
         return value
     end,
     ["ConstDeclaration"] = function(self, node, variables)
+        -- same as variable definition but readonly
         local value = self:evaluate(node.value, variables)
         self:declareSymbol(node.name, value, node.vartype, "any", false, variables)
         return value
     end,
     ["FunctionDeclaration"] = function(self, node, variables)
+        -- same as declaring a lambda variable but this is standalone
         local fn = {
             arguments = node.arguments,
             body = node.body,
@@ -302,21 +340,29 @@ local node_type_cases = {
         self:declareSymbol(node.name, fn, nil, "fn", true, variables)
     end,
     ["FunctionCall"] = function(self, node, variables)
+        -- this shit barely works
         local base = node.base
         local fnEntry = self:evaluate(base, variables)
         if type(fnEntry) == "table" then
+            -- its a fluw function (slow asf)
+            -- this is a dict or an array
             if not fnEntry.type or fnEntry.type ~= "fn" then
                 self:handleError(`'{base.value}' is not a function.`)
             end
+            -- you dont have enough arguments (or you gave too much)
             if #node.args ~= #fnEntry.arguments then
                 self:handleError(`Function '{base.value}' expects {#fnEntry.arguments} arguments, got {#node.args}.`)
             end
             local localVars = {}
+            -- we make variables just for the enviroment to work properly
             for i, argName in fnEntry.arguments do
                 localVars[argName] = createVariable(self, self:evaluate(node.args[i], variables), nil, "any", true)
             end
+            -- call the codeblock
             return self:evaluate(fnEntry.body, mix_tables(variables, localVars))
         elseif type(fnEntry) == "function" then
+            -- its a lua native function
+            -- we can just make an array of arguments since we dont need to give them identifiers
             local localVars = {}
             for i = 1, #node.args do
                 localVars[i] = self:evaluate(node.args[i], variables)
@@ -326,6 +372,7 @@ local node_type_cases = {
         return
     end,
     ["Identifier"] = function(self, node, variables)
+        -- variable identifier / lets you access variables
         local name = node.value
         local symbol = self:getSymbol(name, variables)
         if not symbol then
@@ -334,12 +381,14 @@ local node_type_cases = {
         return symbol.value
     end,
     ["ReturnExpression"] = function(self, node, variables)
+        -- end a scope (also ends a parent scope if the local one not contained)
         local value = self:evaluate(node.value, variables)
         self.resulted = true
         self.result = value
         return value
     end,
     ["SkipStatement"] = function(self, node, _variables)
+        -- true is break and false is continue
         if not self.loopContext then
             self:handleError("Skip statement used outside of a loop.")
         end
@@ -378,13 +427,16 @@ function Evaluator:fluwFnToFunction(fn)
     end
 end
 
+-- this returns a "lua usable" value
 function Evaluator:getResult()
     local result = self.result
     if not result then return end
     if type(result) == "table" then
         if result.type == "fn" then
+            -- this is a function
             return self:fluwFnToFunction(result)
         else
+            -- this is a table
             return result.value
         end
     end
