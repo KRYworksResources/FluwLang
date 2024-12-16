@@ -3,6 +3,7 @@ local LexerUtils = require("lexer_utils")
 local Parser = require("parser")
 local Types = require("types")
 local Evaluator = require("evaluator")
+local Std = require("std")
 
 function FluwVM:execute(input:string)
     local tokens = LexerUtils.parseStringToTokens(input)
@@ -50,6 +51,9 @@ function FluwVM.new()
         __index = FluwVM
     })
     vm.Evaluator = Evaluator.new()
+    for k, v in Std do
+        vm:pushToEnv(k, v)
+    end
     return vm
 end
 
